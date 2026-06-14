@@ -378,6 +378,7 @@ input[type="file"] { display: none; }
       </div>
       <input type="hidden" id="sigResaId">
       <input type="hidden" id="sigType">
+      <input type="hidden" id="sigWho">
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn btn-light" style="flex:1" onclick="clearSignature()">🗑️ Effacer</button>
         <button class="btn btn-primary" style="flex:2" onclick="saveSignature()">✅ Valider la signature</button>
@@ -510,7 +511,7 @@ var APP = {
   docsFilter: 'all'
 };
 
-var RESA_DOCS = ['Contrat de Prêt', 'État Départ', 'État Retour', 'Assurance', 'Permis Chauffeur', 'Rapport Conso'];
+var RESA_DOCS = ['Contrat de Prêt', 'Assurance', 'Permis Chauffeur', 'Rapport Conso'];
 var VEH_DOCS = ['Carte Grise', 'Certificat Homologation', 'Agrément ADR'];
 
 // =============================================
@@ -993,25 +994,35 @@ function openResaDetail(id) {
   html+='<label class="btn btn-full" for="upPhotoDg_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter photo dégradation</label>';
   html+='<input type="file" id="upPhotoDg_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'degradation\',this)" style="display:none">';
 
-  // Signatures client (départ et retour)
-  html+='<div class="divider"></div><div class="section-title">✍️ Signature client — Départ</div>';
-  if(r.signature_depart) {
-    html+='<img src="'+r.signature_depart+'" alt="" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--gray-light);border-radius:8px;background:white;margin-bottom:8px">';
-  }
-  html+='<button class="btn btn-light btn-full" onclick="openSignaturePad(\''+id+'\',\'depart\')">'+(r.signature_depart?'✍️ Re-signer (départ)':'✍️ Faire signer le client (départ)')+'</button>';
+  // Signatures — Départ
+  html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Départ</div>';
+  html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
+  html+='<span class="doc-chip '+(r.signature_depart?'ok':'missing')+'">'+(r.signature_depart?'✅':'⬜')+' Client</span>';
+  html+='<span class="doc-chip '+(r.signature_vendeur_depart?'ok':'missing')+'">'+(r.signature_vendeur_depart?'✅':'⬜')+' Vendeur</span>';
+  html+='</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'client\')">'+(r.signature_depart?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (vendeur)':'✍️ Signer (vendeur)')+'</button>';
+  html+='</div>';
 
-  html+='<div class="divider"></div><div class="section-title">✍️ Signature client — Retour</div>';
-  if(r.signature_retour) {
-    html+='<img src="'+r.signature_retour+'" alt="" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--gray-light);border-radius:8px;background:white;margin-bottom:8px">';
-  }
-  html+='<button class="btn btn-light btn-full" onclick="openSignaturePad(\''+id+'\',\'retour\')">'+(r.signature_retour?'✍️ Re-signer (retour)':'✍️ Faire signer le client (retour)')+'</button>';
-
+  // Signatures — Retour
+  html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Retour</div>';
+  html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
+  html+='<span class="doc-chip '+(r.signature_retour?'ok':'missing')+'">'+(r.signature_retour?'✅':'⬜')+' Client</span>';
+  html+='<span class="doc-chip '+(r.signature_vendeur_retour?'ok':'missing')+'">'+(r.signature_vendeur_retour?'✅':'⬜')+' Vendeur</span>';
+  html+='</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'client\')">'+(r.signature_retour?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'vendeur\')">'+(r.signature_vendeur_retour?'✍️ Re-signer (vendeur)':'✍️ Signer (vendeur)')+'</button>';
+  html+='</div>';
 
   // Actions
   html+='<div class="divider"></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
-  html+='<button class="btn btn-primary" onclick="genPdfDepart(\''+id+'\')">📄 Départ PDF</button>';
-  html+='<button class="btn btn-orange" onclick="genPdfRetour(\''+id+'\')">📄 Retour PDF</button>';
+  var departSigned=!!(r.signature_depart||r.signature_vendeur_depart);
+  var retourSigned=!!(r.signature_retour||r.signature_vendeur_retour);
+  html+='<button class="btn btn-primary" onclick="genPdfDepart(\''+id+'\')">📄 Départ PDF'+(departSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
+  html+='<button class="btn btn-orange" onclick="genPdfRetour(\''+id+'\')">📄 Retour PDF'+(retourSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
   html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'depart\')">📷 Départ</button>';
@@ -1187,10 +1198,13 @@ function saveKilometrage(resaId) {
 // =============================================
 var sigPad=null;
 
-function openSignaturePad(resaId, type) {
+function openSignaturePad(resaId, type, who) {
+  who=who||'client';
   document.getElementById('sigResaId').value=resaId;
   document.getElementById('sigType').value=type;
-  document.querySelector('#modalSignature .modal-title').textContent='Signature client — '+(type==='depart'?'Départ':'Retour');
+  document.getElementById('sigWho').value=who;
+  var whoLabel=who==='vendeur'?'Vendeur':'Client';
+  document.querySelector('#modalSignature .modal-title').textContent='Signature '+whoLabel+' — '+(type==='depart'?'Départ':'Retour');
   openModal('modalSignature');
   setTimeout(function(){
     var canvas=document.getElementById('sigCanvas');
@@ -1215,10 +1229,13 @@ function saveSignature() {
   if(!sigPad || sigPad.isEmpty()) return showToast('Veuillez signer avant de valider');
   var resaId=document.getElementById('sigResaId').value;
   var type=document.getElementById('sigType').value;
-  var field=type==='depart'?'signature_depart':'signature_retour';
+  var who=document.getElementById('sigWho').value||'client';
+  var field;
+  if(who==='vendeur') field=type==='depart'?'signature_vendeur_depart':'signature_vendeur_retour';
+  else field=type==='depart'?'signature_depart':'signature_retour';
   var dataUrl=sigPad.toDataURL('image/png');
   showLoader('Enregistrement de la signature...');
-  var path='reservations/'+resaId+'/signature_'+type+'_'+Date.now()+'.png';
+  var path='reservations/'+resaId+'/signature_'+who+'_'+type+'_'+Date.now()+'.png';
   uploadToStorage('daf-documents', path, dataUrl).then(function(res){
     if(res.error) throw res.error;
     var url=getPublicUrl('daf-documents', path);
@@ -1453,74 +1470,101 @@ function genPdfConfirmation(resaId, type) {
 
   return heroPromise.then(function(heroImgData){
 
-  // Helper : ajoute la signature du client en bas du document (départ ou retour)
-  function addSignatureSection() {
-    var sigUrl=type==='depart'?r.signature_depart:r.signature_retour;
-    if(!sigUrl) return Promise.resolve();
-    return fetch(sigUrl).then(function(resp){return resp.blob();}).then(function(blob){
+  // Helper : charge une image distante en dataURL
+  function loadImgAsDataUrl(url) {
+    return fetch(url).then(function(resp){return resp.blob();}).then(function(blob){
       return new Promise(function(resolve){
         var reader=new FileReader();
         reader.onload=function(e){resolve(e.target.result);};
         reader.readAsDataURL(blob);
       });
-    }).then(function(sigImgData){
-      var sigW=70, sigH=28;
-      if(y+sigH+12>pageH-margin) { doc.addPage(); y=margin; }
+    }).catch(function(){return null;});
+  }
+
+  // Helper : ajoute les blocs signature client + vendeur en bas du document (départ ou retour)
+  function addSignatureSection() {
+    var clientSigUrl=type==='depart'?r.signature_depart:r.signature_retour;
+    var vendeurSigUrl=type==='depart'?r.signature_vendeur_depart:r.signature_vendeur_retour;
+    if(!clientSigUrl && !vendeurSigUrl) return Promise.resolve();
+
+    var chauffeurNomComplet=((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()||'—';
+    var vendeurNom=r.vendeur||'—';
+
+    return Promise.all([
+      clientSigUrl?loadImgAsDataUrl(clientSigUrl):Promise.resolve(null),
+      vendeurSigUrl?loadImgAsDataUrl(vendeurSigUrl):Promise.resolve(null)
+    ]).then(function(results){
+      var clientImg=results[0], vendeurImg=results[1];
+      var colGap=6;
+      var colW=(contentW-colGap)/2;
+      var sigH=26;
+      var blockH=6+4+sigH;
+      if(y+blockH+8>pageH-margin) { doc.addPage(); y=margin; }
       y+=4;
-      doc.setFont(undefined,'bold');
-      doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
-      doc.setFontSize(8);
-      doc.text('SIGNATURE CLIENT — '+(type==='depart'?'DÉPART':'RETOUR'), margin, y);
-      y+=3;
-      try {
-        doc.setDrawColor(220,224,230);
-        doc.setLineWidth(0.3);
-        doc.rect(margin,y,sigW,sigH);
-        doc.addImage(sigImgData,'PNG',margin,y,sigW,sigH);
-      } catch(e){}
-      y+=sigH+6;
-    }).catch(function(){});
+
+      function drawBlock(x, label, name, imgData) {
+        doc.setFont(undefined,'bold');
+        doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+        doc.setFontSize(8);
+        doc.text(label, x, y);
+        doc.setFont(undefined,'bold');
+        doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+        doc.setFontSize(9.5);
+        doc.text(name, x, y+4.5);
+        try {
+          doc.setDrawColor(220,224,230);
+          doc.setLineWidth(0.3);
+          doc.rect(x,y+7,colW,sigH);
+          if(imgData) doc.addImage(imgData,'PNG',x,y+7,colW,sigH);
+        } catch(e){}
+      }
+
+      drawBlock(margin, 'SIGNATURE CLIENT — '+(type==='depart'?'DÉPART':'RETOUR'), chauffeurNomComplet, clientImg);
+      drawBlock(margin+colW+colGap, 'SIGNATURE VENDEUR — '+(type==='depart'?'DÉPART':'RETOUR'), vendeurNom, vendeurImg);
+
+      y+=blockH+6;
+    });
   }
 
   if(heroImgData) {
-    var heroH=58;
-    try {
-      doc.addImage(heroImgData,'JPEG',margin,y,contentW,heroH);
-    } catch(e){}
-    doc.setDrawColor(220,224,230);
-    doc.setLineWidth(0.3);
-    doc.rect(margin,y,contentW,heroH);
-
-    // Bandeau dégradé sombre en bas de la photo pour la lisibilité du texte
-    var gradSteps=18;
-    for(var g=0;g<gradSteps;g++) {
-      var gh=heroH*0.55/gradSteps;
-      var gy=y+heroH-heroH*0.55+g*gh;
-      var alpha=(g/gradSteps);
-      doc.setFillColor(0,0,0);
-      try { doc.setGState(new window.jspdf.GState({opacity:alpha*0.55})); } catch(e){}
-      doc.rect(margin, gy, contentW, gh+0.3, 'F');
-    }
-    try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
-
-    // Modèle en gros et gras, en bas à gauche
+    // Titre (modèle) en gros et gras
     doc.setFont(undefined,'bold');
-    doc.setTextColor(255,255,255);
-    doc.setFontSize(20);
-    doc.text(veh&&veh.modele?veh.modele:immat, margin+5, y+heroH-8);
+    doc.setTextColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
+    doc.setFontSize(18);
+    doc.text(veh&&veh.modele?veh.modele:immat, margin, y+6);
+    y+=9;
 
-    // Note commerciale, juste au-dessus
+    // Note commerciale juste en dessous du titre
     if(veh && veh.note_commerciale) {
       doc.setFont(undefined,'normal');
+      doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
       doc.setFontSize(9.5);
-      var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, contentW-10);
+      var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, contentW);
       var maxLines=2;
       if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
-      var noteY=y+heroH-8-(heroNoteLines.length*4.5)-2;
-      doc.text(heroNoteLines, margin+5, noteY);
+      doc.text(heroNoteLines, margin, y+3);
+      y+=heroNoteLines.length*4.5+3;
     }
 
-    y+=heroH+8;
+    // Photo véhicule, ratio préservé (pas d'étirement)
+    var heroBoxH=58;
+    doc.setFillColor(COL_LIGHT_BG[0],COL_LIGHT_BG[1],COL_LIGHT_BG[2]);
+    doc.rect(margin,y,contentW,heroBoxH,'F');
+    doc.setDrawColor(220,224,230);
+    doc.setLineWidth(0.3);
+    doc.rect(margin,y,contentW,heroBoxH);
+
+    try {
+      var props=doc.getImageProperties(heroImgData);
+      var ratio=props.width/props.height;
+      var drawW=contentW, drawH=contentW/ratio;
+      if(drawH>heroBoxH) { drawH=heroBoxH; drawW=heroBoxH*ratio; }
+      var imgX=margin+(contentW-drawW)/2;
+      var imgY=y+(heroBoxH-drawH)/2;
+      doc.addImage(heroImgData,'JPEG',imgX,imgY,drawW,drawH);
+    } catch(e){}
+
+    y+=heroBoxH+8;
   }
 
   // Référence + date
@@ -1596,9 +1640,9 @@ function genPdfConfirmation(resaId, type) {
   var chauffeurNomComplet=((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()||'—';
   fieldLine('NOM ET PRÉNOM', chauffeurNomComplet, y, 0);
   fieldLine('TÉLÉPHONE', r.chauffeur_telephone, y, contentW/2);
-  y+=10;
+  y+=11;
 
-  // Cases à cocher vérifications
+  // Cases à cocher vérifications (réutilisées plus bas pour DOCUMENTS REMIS)
   function checkbox(label, checked, xOffset, yPos) {
     var size=3.2;
     doc.setDrawColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
@@ -1613,9 +1657,6 @@ function genPdfConfirmation(resaId, type) {
     doc.setFontSize(9);
     doc.text(label, margin+xOffset+size+2, yPos);
   }
-  checkbox('Permis de conduire vérifié', !!r.permis_verifie, 0, y);
-  checkbox('Assurance vérifiée', !!r.assurance_verifiee, contentW/2, y);
-  y+=10;
 
   // ===== DOCUMENTS REMIS =====
   var DEPART_DOCS = [
@@ -1623,7 +1664,6 @@ function genPdfConfirmation(resaId, type) {
     {label:"Certificat d'homologation", source:'vehicle', key:'doc_certificat_homologation'},
     {label:'Agrément ADR (le cas échéant)', source:'vehicle', key:'doc_agr_ment_adr'},
     {label:'Contrat de prêt du véhicule', source:'resa', key:'doc_'+slugify('Contrat de Prêt')},
-    {label:'État du véhicule au départ', source:'resa', key:'doc_'+slugify('État Départ')},
     {label:'Permis de conduire chauffeur', source:'resa', key:'doc_'+slugify('Permis Chauffeur')},
     {label:'Mémo assurance', source:'resa', key:'doc_'+slugify('Assurance')}
   ];
