@@ -730,9 +730,10 @@ function buildResaCard(r) {
     var key='doc_'+slugify(RESA_DOCS[k]);
     docsHtml+='<span class="doc-chip '+(r[key]?'ok':'missing')+'">'+RESA_DOCS[k].split(' ')[0]+'</span>';
   }
-  var pd=(r.photos_depart||[]).length, pr=(r.photos_retour||[]).length;
+  var pd=(r.photos_depart||[]).length, pr=(r.photos_retour||[]).length, pdg=(r.photos_degradation||[]).length;
   docsHtml+='<span class="doc-chip '+(pd>0?'ok':'missing')+'">📷D('+pd+')</span>';
   docsHtml+='<span class="doc-chip '+(pr>0?'ok':'missing')+'">📷R('+pr+')</span>';
+  if(pdg>0) docsHtml+='<span class="doc-chip" style="background:#fde8e8;color:var(--danger)">⚠️('+pdg+')</span>';
 
   return '<div class="resa-card" style="border-left-color:'+color+'" onclick="openResaDetail(\''+r.id+'\')">'+
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+
@@ -844,7 +845,7 @@ function saveResa() {
 
   var promise;
   if(editId) promise=sb.from('reservations').update(data).eq('id',editId);
-  else { data.photos_depart=[]; data.photos_retour=[]; promise=sb.from('reservations').insert(data).select(); }
+  else { data.photos_depart=[]; data.photos_retour=[]; data.photos_degradation=[]; promise=sb.from('reservations').insert(data).select(); }
 
   promise.then(function(res){
     if(res.error) throw res.error;
@@ -919,6 +920,16 @@ function openResaDetail(id) {
   html+='<input type="checkbox" id="assuranceCheck_'+id+'" '+(r.assurance_verifiee?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:18px;height:18px">';
   html+='Assurance vérifiée</label>';
 
+  // Kilométrage
+  html+='<div class="divider"></div><div class="section-title">🔢 Kilométrage</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  html+='<div><label class="form-label">Départ (km)</label><input type="number" class="form-input" id="kmDepart_'+id+'" value="'+(r.km_depart!=null?r.km_depart:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Retour (km)</label><input type="number" class="form-input" id="kmRetour_'+id+'" value="'+(r.km_retour!=null?r.km_retour:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
+  html+='</div>';
+  if(r.km_depart!=null && r.km_retour!=null && r.km_retour>=r.km_depart) {
+    html+='<div class="info-row"><span class="info-label">Distance parcourue</span><span class="info-value">'+(r.km_retour-r.km_depart).toLocaleString('fr-FR')+' km</span></div>';
+  }
+
   html+='<div class="divider"></div><div class="section-title">Photos Départ</div>';
   html+='<div class="photo-grid" id="pdGrid_'+id+'">';
   var pd=r.photos_depart||[];
@@ -942,15 +953,32 @@ function openResaDetail(id) {
   html+='<input type="file" id="upPhotoR_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'retour\',this)">';
   html+='</div>';
 
+  // Photos dégradation
+  html+='<div class="divider"></div><div class="section-title">📸 Photos Dégradation</div>';
+  html+='<div id="pdgList_'+id+'">';
+  var pdg=r.photos_degradation||[];
+  for(var p=0;p<pdg.length;p++) {
+    html+='<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">';
+    html+='<img class="photo-thumb" src="'+pdg[p].url+'" onclick="viewPhoto(\''+pdg[p].url+'\')" alt="" style="flex-shrink:0">';
+    html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(pdg[p].note||'').replace(/"/g,'&quot;')+'" onchange="updateDegradationNote(\''+id+'\','+p+',this.value)" style="flex:1">';
+    html+='<button onclick="deletePhoto(\''+id+'\',\'degradation\','+p+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0">✕</button>';
+    html+='</div>';
+  }
+  html+='</div>';
+  html+='<label class="btn btn-light btn-full" for="upPhotoDg_'+id+'" style="cursor:pointer;text-align:center;display:block">+ Ajouter photo dégradation</label>';
+  html+='<input type="file" id="upPhotoDg_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'degradation\',this)" style="display:none">';
+
+
   // Actions
   html+='<div class="divider"></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
   html+='<button class="btn btn-primary" onclick="genPdfDepart(\''+id+'\')">📄 Départ PDF</button>';
   html+='<button class="btn btn-orange" onclick="genPdfRetour(\''+id+'\')">📄 Retour PDF</button>';
   html+='</div>';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'depart\')">📷 Départ</button>';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'retour\')">📷 Retour</button>';
+  html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'degradation\')">📷 Dégrad.</button>';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'all\')">📷 Toutes</button>';
   html+='</div>';
   html+='<button class="btn btn-success btn-full" style="margin-bottom:8px" onclick="downloadAllDemoZip(\''+id+'\')">📦 Tout télécharger (ZIP)</button>';
@@ -1056,10 +1084,10 @@ function uploadPhotos(resaId, type, input) {
   var files=input.files; if(!files||files.length===0) return;
   var r=getResa(resaId); if(!r) return;
   showLoader('Upload photos...');
-  var key=type==='depart'?'photos_depart':'photos_retour';
+  var key=type==='depart'?'photos_depart':(type==='retour'?'photos_retour':'photos_degradation');
   var existing=r[key]||[];
   var remaining=files.length;
-  var newUrls=[];
+  var newItems=[];
 
   for(var i=0;i<files.length;i++) {
     (function(file){
@@ -1067,11 +1095,12 @@ function uploadPhotos(resaId, type, input) {
         var path='reservations/'+resaId+'/'+type+'_'+Date.now()+'_'+Math.random().toString(36).substr(2,4)+'.jpg';
         uploadToStorage('daf-documents', path, base64).then(function(res){
           if(res.error) throw res.error;
-          newUrls.push(getPublicUrl('daf-documents', path));
+          var url=getPublicUrl('daf-documents', path);
+          newItems.push(type==='degradation'?{url:url,note:''}:url);
           remaining--;
           if(remaining===0) {
-            var allUrls=existing.concat(newUrls);
-            var update={}; update[key]=allUrls;
+            var allItems=existing.concat(newItems);
+            var update={}; update[key]=allItems;
             return sb.from('reservations').update(update).eq('id',resaId).then(function(res2){
               if(res2.error) throw res2.error;
               return loadReservations();
@@ -1085,6 +1114,34 @@ function uploadPhotos(resaId, type, input) {
       });
     })(files[i]);
   }
+}
+
+function saveKilometrage(resaId) {
+  var r=getResa(resaId); if(!r) return;
+  var kmDepart=document.getElementById('kmDepart_'+resaId).value;
+  var kmRetour=document.getElementById('kmRetour_'+resaId).value;
+  kmDepart=kmDepart===''?null:parseInt(kmDepart);
+  kmRetour=kmRetour===''?null:parseInt(kmRetour);
+
+  if(kmDepart!=null && kmRetour!=null && kmRetour<kmDepart) {
+    showToast('Le kilométrage retour doit être supérieur au départ');
+    return;
+  }
+
+  var data={km_depart:kmDepart, km_retour:kmRetour};
+  showLoader('Enregistrement...');
+  sb.from('reservations').update(data).eq('id',resaId).then(function(res){
+    if(res.error) throw res.error;
+    if(kmRetour!=null) {
+      return sb.from('vehicles').update({kilometrage_actuel:kmRetour}).eq('id',r.vehicle_id);
+    }
+  }).then(function(){
+    return Promise.all([loadVehicles(),loadReservations()]);
+  }).then(function(){
+    hideLoader();
+    openResaDetail(resaId);
+    showToast('Kilométrage enregistré');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
 function saveDriverInfo(resaId) {
@@ -1106,7 +1163,7 @@ function saveDriverInfo(resaId) {
 function deletePhoto(resaId, type, index) {
   if(!confirm('Supprimer cette photo ?')) return;
   var r=getResa(resaId); if(!r) return;
-  var key=type==='depart'?'photos_depart':'photos_retour';
+  var key=type==='depart'?'photos_depart':(type==='retour'?'photos_retour':'photos_degradation');
   var photos=(r[key]||[]).slice();
   photos.splice(index,1);
   var update={}; update[key]=photos;
@@ -1119,6 +1176,19 @@ function deletePhoto(resaId, type, index) {
     openResaDetail(resaId);
     showToast('Photo supprimée');
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function updateDegradationNote(resaId, index, note) {
+  var r=getResa(resaId); if(!r) return;
+  var photos=(r.photos_degradation||[]).slice();
+  if(!photos[index]) return;
+  photos[index]={url:photos[index].url,note:note};
+  sb.from('reservations').update({photos_degradation:photos}).eq('id',resaId).then(function(res){
+    if(res.error) throw res.error;
+    return loadReservations();
+  }).then(function(){
+    showToast('Note enregistrée');
+  }).catch(function(e){showToast('Erreur');console.error(e);});
 }
 
 function viewPhoto(src) {
@@ -1134,6 +1204,7 @@ function downloadAllPhotos(resaId, type) {
   var urls=[];
   if(type==='depart'||type==='all') urls=urls.concat(r.photos_depart||[]);
   if(type==='retour'||type==='all') urls=urls.concat(r.photos_retour||[]);
+  if(type==='degradation'||type==='all') urls=urls.concat((r.photos_degradation||[]).map(function(item){return item.url;}));
   if(urls.length===0) return showToast('Aucune photo');
   showLoader('Préparation ZIP...');
   var zip=new JSZip();
@@ -1194,12 +1265,23 @@ function downloadAllDemoZip(resaId) {
   // Photos
   var allPhotos=(r.photos_depart||[]).map(function(u,i){return{url:u,name:'photos_depart/photo_'+(i+1)+'.jpg'};});
   allPhotos=allPhotos.concat((r.photos_retour||[]).map(function(u,i){return{url:u,name:'photos_retour/photo_'+(i+1)+'.jpg'};}));
+  allPhotos=allPhotos.concat((r.photos_degradation||[]).map(function(item,i){return{url:item.url,name:'photos_degradation/photo_'+(i+1)+'.jpg'};}));
   for(var p=0;p<allPhotos.length;p++) {
     (function(item){
       promises.push(fetch(item.url).then(function(resp){return resp.blob();}).then(function(blob){
         zip.file(item.name, blob);
       }).catch(function(){}));
     })(allPhotos[p]);
+  }
+
+  // Notes dégradation
+  var pdg=r.photos_degradation||[];
+  if(pdg.length>0) {
+    var notes='PHOTOS DÉGRADATION\n\n';
+    for(var n=0;n<pdg.length;n++) {
+      notes+='Photo '+(n+1)+': '+(pdg[n].note||'(sans description)')+'\n';
+    }
+    zip.file('photos_degradation/notes.txt', notes);
   }
 
   Promise.all(promises).then(function(){
@@ -1314,6 +1396,16 @@ function genPdfConfirmation(resaId, type) {
     fieldLine('DÉPART LE', formatDate(r.date_start), y, contentW/2);
   }
   y+=11;
+
+  // ===== KILOMÉTRAGE (retour uniquement) =====
+  if(type==='retour' && r.km_depart!=null && r.km_retour!=null) {
+    y=sectionBox('KILOMÉTRAGE', y);
+    fieldLine('KM AU DÉPART', r.km_depart.toLocaleString('fr-FR')+' km', y, 0);
+    fieldLine('KM AU RETOUR', r.km_retour.toLocaleString('fr-FR')+' km', y, contentW/3);
+    var distance=r.km_retour-r.km_depart;
+    fieldLine('DISTANCE PARCOURUE', distance.toLocaleString('fr-FR')+' km', y, (contentW/3)*2);
+    y+=11;
+  }
 
   // ===== RESPONSABLE & CLIENT =====
   y=sectionBox('RESPONSABLE DAF & CLIENT', y);
@@ -1432,6 +1524,61 @@ function genPdfConfirmation(resaId, type) {
           doc.setFont(undefined,'normal');
           doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
           doc.text('Document disponible en téléchargement séparé dans l\'application.', margin, y);
+        }
+      }
+
+      // Signalement des dégradations (retour uniquement)
+      if(type==='retour') {
+        var pdg=r.photos_degradation||[];
+        if(pdg.length>0) {
+          doc.addPage();
+          y=margin;
+          y=sectionBox('⚠ SIGNALEMENT DES DÉGRADATIONS', y);
+
+          var loadDegPromises=pdg.map(function(item){
+            return fetch(item.url).then(function(resp){return resp.blob();}).then(function(blob){
+              return new Promise(function(resolve){
+                var reader=new FileReader();
+                reader.onload=function(e){resolve(e.target.result);};
+                reader.readAsDataURL(blob);
+              });
+            }).catch(function(){return null;});
+          });
+
+          return Promise.all(loadDegPromises).then(function(degImgDatas){
+            var degImgW=55, degImgH=45;
+            for(var d=0;d<degImgDatas.length;d++) {
+              if(y+degImgH>pageH-margin) { doc.addPage(); y=margin; }
+              if(degImgDatas[d]) {
+                try {
+                  doc.setDrawColor(220,224,230);
+                  doc.setLineWidth(0.3);
+                  doc.rect(margin,y,degImgW,degImgH);
+                  doc.addImage(degImgDatas[d],'JPEG',margin,y,degImgW,degImgH);
+                } catch(e){}
+              }
+              doc.setFont(undefined,'bold');
+              doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+              doc.setFontSize(8);
+              doc.text('Dégradation '+(d+1), margin+degImgW+5, y+5);
+              doc.setFont(undefined,'normal');
+              doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+              doc.setFontSize(9);
+              var noteLines=doc.splitTextToSize(pdg[d].note||'(sans description)', contentW-degImgW-5);
+              doc.text(noteLines, margin+degImgW+5, y+11);
+              y+=degImgH+6;
+            }
+
+            addFooter(doc, pageW, pageH, margin);
+            hideLoader();
+            doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
+            showToast('PDF généré');
+          }).catch(function(e){
+            addFooter(doc, pageW, pageH, margin);
+            hideLoader();
+            doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
+            showToast('PDF généré (sans photos dégradation)');
+          });
         }
       }
 
