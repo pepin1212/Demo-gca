@@ -1398,12 +1398,15 @@ function genPdfConfirmation(resaId, type) {
   y+=11;
 
   // ===== KILOMÉTRAGE (retour uniquement) =====
+  function fmtKm(n) {
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  }
   if(type==='retour' && r.km_depart!=null && r.km_retour!=null) {
     y=sectionBox('KILOMÉTRAGE', y);
-    fieldLine('KM AU DÉPART', r.km_depart.toLocaleString('fr-FR')+' km', y, 0);
-    fieldLine('KM AU RETOUR', r.km_retour.toLocaleString('fr-FR')+' km', y, contentW/3);
+    fieldLine('KM AU DÉPART', fmtKm(r.km_depart)+' km', y, 0);
+    fieldLine('KM AU RETOUR', fmtKm(r.km_retour)+' km', y, contentW/3);
     var distance=r.km_retour-r.km_depart;
-    fieldLine('DISTANCE PARCOURUE', distance.toLocaleString('fr-FR')+' km', y, (contentW/3)*2);
+    fieldLine('DISTANCE PARCOURUE', fmtKm(distance)+' km', y, (contentW/3)*2);
     y+=11;
   }
 
@@ -1533,7 +1536,16 @@ function genPdfConfirmation(resaId, type) {
         if(pdg.length>0) {
           doc.addPage();
           y=margin;
-          y=sectionBox('⚠ SIGNALEMENT DES DÉGRADATIONS', y);
+
+          // Bandeau de titre coloré (alerte)
+          var COL_ALERT_BG=[254,226,226], COL_ALERT=[220,38,38];
+          doc.setFillColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
+          doc.rect(margin, y, contentW, 10, 'F');
+          doc.setFont(undefined,'bold');
+          doc.setTextColor(255,255,255);
+          doc.setFontSize(11);
+          doc.text('⚠ SIGNALEMENT DES DÉGRADATIONS', margin+4, y+7);
+          y+=15;
 
           var loadDegPromises=pdg.map(function(item){
             return fetch(item.url).then(function(resp){return resp.blob();}).then(function(blob){
@@ -1546,27 +1558,39 @@ function genPdfConfirmation(resaId, type) {
           });
 
           return Promise.all(loadDegPromises).then(function(degImgDatas){
-            var degImgW=55, degImgH=45;
+            var degImgW=55, degImgH=45, boxPad=4;
             for(var d=0;d<degImgDatas.length;d++) {
-              if(y+degImgH>pageH-margin) { doc.addPage(); y=margin; }
+              var boxH=degImgH+2*boxPad;
+              if(y+boxH>pageH-margin) { doc.addPage(); y=margin; }
+
+              // Encadré coloré autour de chaque dégradation
+              doc.setFillColor(COL_ALERT_BG[0],COL_ALERT_BG[1],COL_ALERT_BG[2]);
+              doc.setDrawColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
+              doc.setLineWidth(0.6);
+              doc.roundedRect(margin, y, contentW, boxH, 2, 2, 'FD');
+
+              var imgX=margin+boxPad, imgY=y+boxPad;
               if(degImgDatas[d]) {
                 try {
-                  doc.setDrawColor(220,224,230);
-                  doc.setLineWidth(0.3);
-                  doc.rect(margin,y,degImgW,degImgH);
-                  doc.addImage(degImgDatas[d],'JPEG',margin,y,degImgW,degImgH);
+                  doc.setDrawColor(255,255,255);
+                  doc.setLineWidth(0.5);
+                  doc.rect(imgX,imgY,degImgW,degImgH);
+                  doc.addImage(degImgDatas[d],'JPEG',imgX,imgY,degImgW,degImgH);
                 } catch(e){}
               }
+
+              var textX=imgX+degImgW+6;
               doc.setFont(undefined,'bold');
-              doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
-              doc.setFontSize(8);
-              doc.text('Dégradation '+(d+1), margin+degImgW+5, y+5);
+              doc.setTextColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
+              doc.setFontSize(10);
+              doc.text('Dégradation '+(d+1), textX, imgY+6);
               doc.setFont(undefined,'normal');
               doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
-              doc.setFontSize(9);
-              var noteLines=doc.splitTextToSize(pdg[d].note||'(sans description)', contentW-degImgW-5);
-              doc.text(noteLines, margin+degImgW+5, y+11);
-              y+=degImgH+6;
+              doc.setFontSize(9.5);
+              var noteLines=doc.splitTextToSize(pdg[d].note||'(sans description)', contentW-degImgW-3*boxPad-6);
+              doc.text(noteLines, textX, imgY+13);
+
+              y+=boxH+6;
             }
 
             addFooter(doc, pageW, pageH, margin);
