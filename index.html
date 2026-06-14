@@ -73,6 +73,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .page { display: none; padding: 14px; }
 .page.active { display: block; }
 .page-title { font-size: 18px; font-weight: 800; color: var(--blue); }
+.page-header-sticky { position: sticky; top: 0; z-index: 50; background: var(--light); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 10px 0; }
 
 /* CARDS */
 .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 12px; }
@@ -107,11 +108,13 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .cal-nav { background: none; border: none; cursor: pointer; padding: 5px; color: var(--blue); font-size: 18px; }
 .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .cal-day-label { text-align: center; font-size: 9px; font-weight: 700; color: var(--gray); padding: 3px 0; text-transform: uppercase; }
-.cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
+.cal-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 500; padding-top: 2px; gap: 1px; overflow: hidden; background: var(--light); }
+.cal-day-num { line-height: 1; }
+.cal-day-bars { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 0 2px; margin-top: 1px; }
+.cal-day-bar { height: 3px; border-radius: 1px; width: 100%; }
+.cal-day-bar.atelier { background: repeating-linear-gradient(90deg, #94a3b8, #94a3b8 2px, #cbd5e1 2px, #cbd5e1 4px); }
 .cal-day.today { font-weight: 800; color: var(--blue); border: 1.5px solid var(--blue); }
-.cal-day.both { background: linear-gradient(135deg, var(--blue) 50%, var(--orange) 50%); color: white; }
 .cal-day.past { color: #d1d5db; cursor: default; }
-.cal-day.atelier { background: repeating-linear-gradient(45deg, #94a3b8, #94a3b8 4px, #cbd5e1 4px, #cbd5e1 8px); color: white; }
 
 /* ATELIER BADGE */
 .atelier-badge { display: inline-block; background: #94a3b8; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-top: 6px; }
@@ -257,7 +260,7 @@ input[type="file"] { display: none; }
 
 <!-- PAGES -->
 <div class="page active" id="page-planning">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="page-header-sticky">
     <div class="page-title">Planning</div>
     <button class="btn btn-orange btn-sm" onclick="openNewResa()">+ Réserver</button>
   </div>
@@ -277,7 +280,7 @@ input[type="file"] { display: none; }
 </div>
 
 <div class="page" id="page-reservations">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="page-header-sticky">
     <div class="page-title">Réservations</div>
     <button class="btn btn-orange btn-sm" onclick="openNewResa()">+ Nouvelle</button>
   </div>
@@ -291,7 +294,7 @@ input[type="file"] { display: none; }
 </div>
 
 <div class="page" id="page-documents">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="page-header-sticky">
     <div class="page-title">Documents</div>
     <button class="btn btn-primary btn-sm" onclick="openArchiveModal()">📦 Archiver</button>
   </div>
@@ -308,7 +311,7 @@ input[type="file"] { display: none; }
 </div>
 
 <div class="page" id="page-vehicules">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+  <div class="page-header-sticky">
     <div class="page-title">Véhicules</div>
     <button class="btn btn-orange btn-sm" onclick="openAddVehicle()">+ Ajouter</button>
   </div>
@@ -661,32 +664,27 @@ function renderCalendar() {
     var date=new Date(m.getFullYear(),m.getMonth(),d);
     var ds=toDateStr(date);
     var cls=['cal-day'];
-    var style='';
     if(date.getTime()===today.getTime()) cls.push('today');
     if(date<today) cls.push('past');
 
-    // Vérifier atelier (priorité visuelle)
-    var inAtelier=false;
+    // Une bande par véhicule : couleur si réservé, hachuré gris si atelier, rien si libre
+    var barsHtml='';
     for(var vi=0;vi<APP.vehicles.length;vi++) {
-      if(isVehicleInAtelier(APP.vehicles[vi], ds)) { inAtelier=true; break; }
+      var v=APP.vehicles[vi];
+      if(isDateReserved(ds, v.id)) {
+        var color=CAL_COLORS[vi%CAL_COLORS.length];
+        barsHtml+='<div class="cal-day-bar" style="background:'+color+'"></div>';
+      } else if(isVehicleInAtelier(v, ds)) {
+        barsHtml+='<div class="cal-day-bar atelier"></div>';
+      } else {
+        barsHtml+='<div class="cal-day-bar" style="background:transparent"></div>';
+      }
     }
 
-    // Véhicules réservés ce jour
-    var reservedVehicles=[];
-    for(var vi=0;vi<APP.vehicles.length;vi++) {
-      if(isDateReserved(ds, APP.vehicles[vi].id)) reservedVehicles.push(vi);
-    }
-
-    if(reservedVehicles.length>1) {
-      cls.push('both');
-    } else if(reservedVehicles.length===1) {
-      var color=CAL_COLORS[reservedVehicles[0]%CAL_COLORS.length];
-      style='background:'+color+';color:white;';
-    } else if(inAtelier) {
-      cls.push('atelier');
-    }
-
-    html+='<div class="'+cls.join(' ')+'" style="'+style+'" onclick="calClick(\''+ds+'\')">'+d+'</div>';
+    html+='<div class="'+cls.join(' ')+'" onclick="calClick(\''+ds+'\')">'+
+      '<div class="cal-day-num">'+d+'</div>'+
+      '<div class="cal-day-bars">'+barsHtml+'</div>'+
+      '</div>';
   }
   document.getElementById('calGrid').innerHTML=html;
 
@@ -696,7 +694,6 @@ function renderCalendar() {
     var color=CAL_COLORS[vi%CAL_COLORS.length];
     legHtml+='<div class="legend-item"><div class="legend-dot" style="background:'+color+'"></div><span>'+esc(APP.vehicles[vi].immat||('Véhicule '+(vi+1)))+'</span></div>';
   }
-  if(APP.vehicles.length>1) legHtml+='<div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,'+CAL_COLORS[0]+' 50%,'+CAL_COLORS[1]+' 50%)"></div>Plusieurs</div>';
   legHtml+='<div class="legend-item"><div class="legend-dot" style="background:repeating-linear-gradient(45deg,#94a3b8,#94a3b8 2px,#cbd5e1 2px,#cbd5e1 4px)"></div>🔧 Atelier</div>';
   document.getElementById('legendDynamic').innerHTML=legHtml;
 }
