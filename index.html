@@ -1655,7 +1655,7 @@ function saveVehicle() {
     closeModal('modalVehicle');
     render();
     showToast(editId?'Véhicule modifié':'Véhicule ajouté');
-  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+  }).catch(function(e){hideLoader();showToast('Erreur: '+(e.message||JSON.stringify(e)));console.error('saveVehicle error:',e);});
 }
 
 function deleteVehicle(id) {
