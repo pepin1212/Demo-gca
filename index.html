@@ -355,12 +355,9 @@ input[type="file"] { display: none; }
         <div><label class="form-label">Début</label><input type="date" class="form-input" id="resaStart" onchange="checkConflict()"></div>
         <div><label class="form-label">Fin</label><input type="date" class="form-input" id="resaEnd" onchange="checkConflict()"></div>
       </div>
-      <div class="section-title">Vendeur & Chauffeur</div>
+      <div class="section-title">Vendeur & Client</div>
       <div class="form-group"><label class="form-label">Vendeur</label><input type="text" class="form-input" id="resaVendeur"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <div><label class="form-label">Prénom chauffeur</label><input type="text" class="form-input" id="resaDriverName"></div>
-        <div><label class="form-label">Téléphone</label><input type="tel" class="form-input" id="resaDriverPhone"></div>
-      </div>
+      <div class="form-group"><label class="form-label">Entreprise cliente</label><input type="text" class="form-input" id="resaEntreprise" placeholder="Nom de l'entreprise"></div>
       <div class="form-group"><label class="form-label">Note</label><textarea class="form-input" id="resaNote" placeholder="Informations..."></textarea></div>
       <input type="hidden" id="editResaId">
       <button class="btn btn-primary btn-full" onclick="saveResa()">Enregistrer</button>
@@ -743,7 +740,7 @@ function buildResaCard(r) {
     '<span class="status-badge '+statusCls[status]+'">'+statusLabels[status]+'</span></div>'+
     '<div class="resa-name">'+esc(r.vendeur)+'</div>'+
     '<div class="resa-dates">📅 '+formatDate(r.date_start)+' → '+formatDate(r.date_end)+'</div>'+
-    (r.driver_name?'<div class="resa-driver">🚗 '+esc(r.driver_name)+(r.driver_phone?' · <a href="tel:'+esc(r.driver_phone)+'" style="color:var(--blue)">'+esc(r.driver_phone)+'</a>':'')+'</div>':'')+
+    (r.entreprise?'<div class="resa-driver">🏢 '+esc(r.entreprise)+'</div>':'')+
     '<div class="docs-chips">'+docsHtml+'</div></div>';
 }
 
@@ -772,8 +769,7 @@ function openNewResa() {
   document.getElementById('resaStart').value='';
   document.getElementById('resaEnd').value='';
   document.getElementById('resaVendeur').value=APP.user||'';
-  document.getElementById('resaDriverName').value='';
-  document.getElementById('resaDriverPhone').value='';
+  document.getElementById('resaEntreprise').value='';
   document.getElementById('resaNote').value='';
   document.getElementById('conflictWarn').style.display='none';
   APP.selectedVehicleId=APP.vehicles.length>0?APP.vehicles[0].id:null;
@@ -834,8 +830,7 @@ function saveResa() {
   var dateStart=document.getElementById('resaStart').value;
   var dateEnd=document.getElementById('resaEnd').value;
   var vendeur=document.getElementById('resaVendeur').value.trim();
-  var driverName=document.getElementById('resaDriverName').value.trim();
-  var driverPhone=document.getElementById('resaDriverPhone').value.trim();
+  var entreprise=document.getElementById('resaEntreprise').value.trim();
   var note=document.getElementById('resaNote').value.trim();
   var editId=document.getElementById('editResaId').value;
 
@@ -845,7 +840,7 @@ function saveResa() {
   if(!vendeur) return showToast('Prénom vendeur requis');
 
   showLoader('Enregistrement...');
-  var data={vehicle_id:vehicleId,date_start:dateStart,date_end:dateEnd,vendeur:vendeur,driver_name:driverName,driver_phone:driverPhone,note:note};
+  var data={vehicle_id:vehicleId,date_start:dateStart,date_end:dateEnd,vendeur:vendeur,entreprise:entreprise,note:note};
 
   var promise;
   if(editId) promise=sb.from('reservations').update(data).eq('id',editId);
@@ -887,8 +882,7 @@ function openResaDetail(id) {
   html+='<div class="info-row"><span class="info-label">Vendeur</span><span class="info-value">'+esc(r.vendeur)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Début</span><span class="info-value">'+formatDate(r.date_start)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Fin</span><span class="info-value">'+formatDate(r.date_end)+'</span></div>';
-  if(r.driver_name) html+='<div class="info-row"><span class="info-label">Chauffeur</span><span class="info-value">'+esc(r.driver_name)+'</span></div>';
-  if(r.driver_phone) html+='<div class="info-row"><span class="info-label">Téléphone</span><span class="info-value"><a href="tel:'+esc(r.driver_phone)+'" style="color:var(--blue)">'+esc(r.driver_phone)+'</a></span></div>';
+  if(r.entreprise) html+='<div class="info-row"><span class="info-label">Entreprise cliente</span><span class="info-value">'+esc(r.entreprise)+'</span></div>';
   if(r.note) html+='<div style="margin-top:8px;background:var(--light);padding:10px;border-radius:var(--radius-sm);font-size:13px">'+esc(r.note)+'</div>';
 
   // Documents
@@ -911,6 +905,20 @@ function openResaDetail(id) {
   }
 
   // Photos départ
+  // Chauffeur / état des lieux départ
+  html+='<div class="divider"></div><div class="section-title">Chauffeur (état des lieux départ)</div>';
+  html+='<div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="drvNom_'+id+'" value="'+esc(r.chauffeur_nom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" id="drvPrenom_'+id+'" value="'+esc(r.chauffeur_prenom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" id="drvTel_'+id+'" value="'+esc(r.chauffeur_telephone||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
+  html+='</div>';
+  html+='<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer">';
+  html+='<input type="checkbox" id="permisCheck_'+id+'" '+(r.permis_verifie?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:18px;height:18px">';
+  html+='Permis de conduire vérifié</label>';
+  html+='<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer">';
+  html+='<input type="checkbox" id="assuranceCheck_'+id+'" '+(r.assurance_verifiee?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:18px;height:18px">';
+  html+='Assurance vérifiée</label>';
+
   html+='<div class="divider"></div><div class="section-title">Photos Départ</div>';
   html+='<div class="photo-grid" id="pdGrid_'+id+'">';
   var pd=r.photos_depart||[];
@@ -965,8 +973,7 @@ function editResa(id) {
   document.getElementById('resaStart').value=r.date_start;
   document.getElementById('resaEnd').value=r.date_end;
   document.getElementById('resaVendeur').value=r.vendeur;
-  document.getElementById('resaDriverName').value=r.driver_name||'';
-  document.getElementById('resaDriverPhone').value=r.driver_phone||'';
+  document.getElementById('resaEntreprise').value=r.entreprise||'';
   document.getElementById('resaNote').value=r.note||'';
   document.getElementById('conflictWarn').style.display='none';
   renderVehSelector();
@@ -1080,6 +1087,22 @@ function uploadPhotos(resaId, type, input) {
   }
 }
 
+function saveDriverInfo(resaId) {
+  var data={
+    chauffeur_nom: document.getElementById('drvNom_'+resaId).value.trim(),
+    chauffeur_prenom: document.getElementById('drvPrenom_'+resaId).value.trim(),
+    chauffeur_telephone: document.getElementById('drvTel_'+resaId).value.trim(),
+    permis_verifie: document.getElementById('permisCheck_'+resaId).checked,
+    assurance_verifiee: document.getElementById('assuranceCheck_'+resaId).checked
+  };
+  sb.from('reservations').update(data).eq('id',resaId).then(function(res){
+    if(res.error) throw res.error;
+    return loadReservations();
+  }).then(function(){
+    showToast('Informations chauffeur enregistrées');
+  }).catch(function(e){showToast('Erreur: '+(e.message||''));console.error(e);});
+}
+
 function deletePhoto(resaId, type, index) {
   if(!confirm('Supprimer cette photo ?')) return;
   var r=getResa(resaId); if(!r) return;
@@ -1147,8 +1170,11 @@ function downloadAllDemoZip(resaId) {
   fiche+='Véhicule: '+(veh?veh.immat:'-')+'\n';
   fiche+='Vendeur: '+r.vendeur+'\n';
   fiche+='Du '+formatDate(r.date_start)+' au '+formatDate(r.date_end)+'\n';
-  fiche+='Chauffeur: '+(r.driver_name||'-')+'\n';
-  fiche+='Téléphone: '+(r.driver_phone||'-')+'\n';
+  fiche+='Entreprise cliente: '+(r.entreprise||'-')+'\n';
+  fiche+='Chauffeur: '+((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()+'\n';
+  fiche+='Téléphone chauffeur: '+(r.chauffeur_telephone||'-')+'\n';
+  fiche+='Permis vérifié: '+(r.permis_verifie?'Oui':'Non')+'\n';
+  fiche+='Assurance vérifiée: '+(r.assurance_verifiee?'Oui':'Non')+'\n';
   fiche+='Note: '+(r.note||'-')+'\n';
   zip.file('fiche_reservation.txt', fiche);
 
@@ -1254,19 +1280,23 @@ function genPdfConfirmation(resaId, type) {
   doc.setTextColor(0,0,0);
   doc.setFontSize(9);
   doc.text('Vendeur : '+r.vendeur, margin, y); y+=4;
+  doc.text('Entreprise cliente : '+(r.entreprise||'—'), margin, y); y+=4;
 
   // CHAUFFEUR
   y+=2;
   doc.setFont(undefined,'bold');
   doc.setTextColor(232,96,28);
   doc.setFontSize(10);
-  doc.text('CHAUFFEUR / CLIENT', margin, y);
+  doc.text('CHAUFFEUR', margin, y);
   y+=5;
   doc.setFont(undefined,'normal');
   doc.setTextColor(0,0,0);
   doc.setFontSize(9);
-  doc.text('Prénom : '+(r.driver_name||'—'), margin, y); y+=4;
-  doc.text('Téléphone : '+(r.driver_phone||'—'), margin, y); y+=6;
+  doc.text('Nom : '+(r.chauffeur_nom||'—'), margin, y); y+=4;
+  doc.text('Prénom : '+(r.chauffeur_prenom||'—'), margin, y); y+=4;
+  doc.text('Téléphone : '+(r.chauffeur_telephone||'—'), margin, y); y+=4;
+  doc.text((r.permis_verifie?'✓ ':'✗ ')+'Permis de conduire vérifié', margin, y); y+=4;
+  doc.text((r.assurance_verifiee?'✓ ':'✗ ')+'Assurance vérifiée', margin, y); y+=6;
 
   // DOCUMENTS
   doc.setFont(undefined,'bold');
@@ -1497,7 +1527,8 @@ function doArchive() {
     doc.setFontSize(8);
     doc.setFont(undefined,'normal');
     doc.setTextColor(0,0,0);
-    if(r.driver_name) { doc.text('Chauffeur: '+r.driver_name+(r.driver_phone?' ('+r.driver_phone+')':''), margin, y); y+=4; }
+    if(r.entreprise) { doc.text('Entreprise: '+r.entreprise, margin, y); y+=4; }
+    if(r.chauffeur_nom||r.chauffeur_prenom) { doc.text('Chauffeur: '+((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()+(r.chauffeur_telephone?' ('+r.chauffeur_telephone+')':''), margin, y); y+=4; }
     if(r.note) { doc.text('Note: '+r.note.substr(0,80), margin, y); y+=4; }
 
     var docStatus='';
