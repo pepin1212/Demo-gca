@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/signature_pad/4.1.7/signature_pad.umd.min.js"></script>
 <style>
 :root {
   --blue: #003087;
@@ -73,7 +74,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .page { display: none; padding: 14px; }
 .page.active { display: block; }
 .page-title { font-size: 18px; font-weight: 800; color: var(--blue); }
-.page-header-sticky { position: sticky; top: 0; z-index: 50; background: var(--light); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 10px 0; }
+.page-header-sticky { position: sticky; top: var(--header-h, 0px); z-index: 50; background: var(--light); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 10px 0; }
 
 /* CARDS */
 .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 12px; }
@@ -275,20 +276,11 @@ input[type="file"] { display: none; }
       <div class="cal-grid" id="calGrid"></div>
     </div>
   </div>
-  <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:8px">Prochaines réservations</div>
-  <div id="upcomingList"></div>
-</div>
-
-<div class="page" id="page-reservations">
-  <div class="page-header-sticky">
-    <div class="page-title">Réservations</div>
-    <button class="btn btn-orange btn-sm" onclick="openNewResa()">+ Nouvelle</button>
-  </div>
+  <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:8px">Réservations</div>
   <div class="tabs">
-    <button class="tab-btn active" onclick="filterResas('all',this)">Toutes</button>
-    <button class="tab-btn" onclick="filterResas('active',this)">En cours</button>
-    <button class="tab-btn" onclick="filterResas('upcoming',this)">À venir</button>
+    <button class="tab-btn active" onclick="filterResas('current',this)">Actives</button>
     <button class="tab-btn" onclick="filterResas('past',this)">Passées</button>
+    <button class="tab-btn" onclick="filterResas('all',this)">Toutes</button>
   </div>
   <div id="resaList"></div>
 </div>
@@ -323,10 +315,6 @@ input[type="file"] { display: none; }
   <button class="nav-btn active" onclick="showPage('planning',this)" id="nav-planning">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
     Planning<div class="nav-dot"></div>
-  </button>
-  <button class="nav-btn" onclick="showPage('reservations',this)" id="nav-reservations">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Réservations<div class="nav-dot"></div>
   </button>
   <button class="nav-btn" onclick="showPage('documents',this)" id="nav-documents">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
@@ -376,6 +364,28 @@ input[type="file"] { display: none; }
   </div>
 </div>
 
+<div class="modal-overlay" id="modalSignature">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Signature client</div>
+      <button class="modal-close" onclick="closeSignaturePad()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--gray);margin-bottom:8px">Faites signer le client ci-dessous avec le doigt.</p>
+      <div style="border:2px dashed var(--gray-light);border-radius:10px;overflow:hidden;background:white">
+        <canvas id="sigCanvas" style="width:100%;height:200px;display:block;touch-action:none"></canvas>
+      </div>
+      <input type="hidden" id="sigResaId">
+      <input type="hidden" id="sigType">
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-light" style="flex:1" onclick="clearSignature()">🗑️ Effacer</button>
+        <button class="btn btn-primary" style="flex:2" onclick="saveSignature()">✅ Valider la signature</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalVehicle">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -386,6 +396,19 @@ input[type="file"] { display: none; }
     <div class="modal-body">
       <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="vehImmat" placeholder="AB-123-CD" style="text-transform:uppercase;font-size:18px;font-weight:700;letter-spacing:2px"></div>
       <div class="form-group"><label class="form-label">Modèle</label><input type="text" class="form-input" id="vehModele" placeholder="ex: XF 480"></div>
+      <div class="section-title">Photo & présentation</div>
+      <div class="form-group">
+        <label class="form-label">Photo du véhicule</label>
+        <div id="vehPhotoPreviewWrap" style="display:none;margin-bottom:8px">
+          <img id="vehPhotoPreview" src="" alt="" style="width:100%;height:140px;object-fit:cover;border-radius:10px;border:1px solid var(--gray-light)">
+        </div>
+        <label class="btn btn-light btn-full" for="vehPhotoInput" style="cursor:pointer;text-align:center;display:block">📷 Choisir une photo</label>
+        <input type="file" id="vehPhotoInput" accept="image/*" style="display:none" onchange="previewVehiclePhoto(this)">
+        <input type="hidden" id="vehPhotoUrl">
+      </div>
+      <div class="form-group"><label class="form-label">Note commerciale</label>
+        <textarea class="form-input" id="vehNote" rows="3" placeholder="ex: Idéal pour démonstration longue distance, faible consommation, cabine confort XXL..."></textarea>
+      </div>
       <div class="form-group"><label class="form-label">Kilométrage actuel</label><input type="number" class="form-input" id="vehKm" placeholder="0"></div>
       <div class="section-title">Échéances</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -423,6 +446,17 @@ input[type="file"] { display: none; }
       <button class="modal-close" onclick="closeModal('modalVehicleDocs')">✕</button>
     </div>
     <div class="modal-body" id="modalVehicleDocsBody"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalVehicleHistory">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modalVehicleHistoryTitle">Historique véhicule</div>
+      <button class="modal-close" onclick="closeModal('modalVehicleHistory')">✕</button>
+    </div>
+    <div class="modal-body" id="modalVehicleHistoryBody"></div>
   </div>
 </div>
 
@@ -472,7 +506,7 @@ var APP = {
   reservations: [],
   currentMonth: new Date(),
   selectedVehicleId: null,
-  resaFilter: 'all',
+  resaFilter: 'current',
   docsFilter: 'all'
 };
 
@@ -523,6 +557,7 @@ function doLogin() {
   document.getElementById('userChip').textContent=name;
   document.getElementById('resaVendeur').value=name;
   loadAll();
+  updateHeaderOffset();
 }
 
 function logout() {
@@ -615,14 +650,12 @@ function showPage(id, btn) {
   document.getElementById('page-'+id).classList.add('active');
   if(btn) btn.classList.add('active');
   if(id==='planning') renderPlanning();
-  if(id==='reservations') renderResaList();
   if(id==='documents') renderDocsList();
   if(id==='vehicules') renderVehicleList();
 }
 
 function render() {
   renderPlanning();
-  renderResaList();
   renderDocsList();
   renderVehicleList();
 }
@@ -700,18 +733,7 @@ function calClick(dateStr) {
   if(resas.length>0) openResaDetail(resas[0].id);
 }
 
-function renderUpcoming() {
-  var today=toDateStr(new Date());
-  var list=APP.reservations.filter(function(r){return r.date_end>=today;});
-  list.sort(function(a,b){return a.date_start.localeCompare(b.date_start);});
-  list=list.slice(0,5);
-  var html='';
-  if(list.length===0) html='<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-text">Aucune réservation à venir</div><div class="empty-sub">Appuyez sur + Réserver</div></div>';
-  else for(var i=0;i<list.length;i++) html+=buildResaCard(list[i]);
-  document.getElementById('upcomingList').innerHTML=html;
-}
-
-function renderPlanning() { renderCalendar(); renderUpcoming(); }
+function renderPlanning() { renderCalendar(); renderResaList(); }
 
 // =============================================
 // RESERVATIONS
@@ -746,10 +768,11 @@ function buildResaCard(r) {
 }
 
 function renderResaList() {
-  var today=toDateStr(new Date());
   var list=APP.reservations.slice();
   list.sort(function(a,b){return b.date_start.localeCompare(a.date_start);});
-  if(APP.resaFilter!=='all') list=list.filter(function(r){return getResaStatus(r)===APP.resaFilter;});
+  if(APP.resaFilter==='current') list=list.filter(function(r){var s=getResaStatus(r); return s==='active'||s==='upcoming';});
+  else if(APP.resaFilter==='past') list=list.filter(function(r){return getResaStatus(r)==='past';});
+  // 'all' : pas de filtre
   var html='';
   if(list.length===0) html='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Aucune réservation</div></div>';
   else for(var i=0;i<list.length;i++) html+=buildResaCard(list[i]);
@@ -758,7 +781,7 @@ function renderResaList() {
 
 function filterResas(f, btn) {
   APP.resaFilter=f;
-  var tabs=document.querySelectorAll('#page-reservations .tab-btn');
+  var tabs=document.querySelectorAll('#page-planning .tab-btn');
   for(var i=0;i<tabs.length;i++) tabs[i].classList.remove('active');
   if(btn) btn.classList.add('active');
   renderResaList();
@@ -958,15 +981,30 @@ function openResaDetail(id) {
   html+='<div id="pdgList_'+id+'">';
   var pdg=r.photos_degradation||[];
   for(var p=0;p<pdg.length;p++) {
-    html+='<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px">';
+    html+='<div style="margin-bottom:10px">';
+    html+='<div style="display:flex;gap:8px;align-items:flex-start">';
     html+='<img class="photo-thumb" src="'+pdg[p].url+'" onclick="viewPhoto(\''+pdg[p].url+'\')" alt="" style="flex-shrink:0">';
-    html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(pdg[p].note||'').replace(/"/g,'&quot;')+'" onchange="updateDegradationNote(\''+id+'\','+p+',this.value)" style="flex:1">';
-    html+='<button onclick="deletePhoto(\''+id+'\',\'degradation\','+p+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0">✕</button>';
+    html+='<button onclick="deletePhoto(\''+id+'\',\'degradation\','+p+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:auto">✕</button>';
+    html+='</div>';
+    html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(pdg[p].note||'').replace(/"/g,'&quot;')+'" onchange="updateDegradationNote(\''+id+'\','+p+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
     html+='</div>';
   }
   html+='</div>';
   html+='<label class="btn btn-full" for="upPhotoDg_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter photo dégradation</label>';
   html+='<input type="file" id="upPhotoDg_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'degradation\',this)" style="display:none">';
+
+  // Signatures client (départ et retour)
+  html+='<div class="divider"></div><div class="section-title">✍️ Signature client — Départ</div>';
+  if(r.signature_depart) {
+    html+='<img src="'+r.signature_depart+'" alt="" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--gray-light);border-radius:8px;background:white;margin-bottom:8px">';
+  }
+  html+='<button class="btn btn-light btn-full" onclick="openSignaturePad(\''+id+'\',\'depart\')">'+(r.signature_depart?'✍️ Re-signer (départ)':'✍️ Faire signer le client (départ)')+'</button>';
+
+  html+='<div class="divider"></div><div class="section-title">✍️ Signature client — Retour</div>';
+  if(r.signature_retour) {
+    html+='<img src="'+r.signature_retour+'" alt="" style="width:100%;max-height:120px;object-fit:contain;border:1px solid var(--gray-light);border-radius:8px;background:white;margin-bottom:8px">';
+  }
+  html+='<button class="btn btn-light btn-full" onclick="openSignaturePad(\''+id+'\',\'retour\')">'+(r.signature_retour?'✍️ Re-signer (retour)':'✍️ Faire signer le client (retour)')+'</button>';
 
 
   // Actions
@@ -1142,6 +1180,59 @@ function saveKilometrage(resaId) {
     openResaDetail(resaId);
     showToast('Kilométrage enregistré');
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+// =============================================
+// SIGNATURE ÉLECTRONIQUE
+// =============================================
+var sigPad=null;
+
+function openSignaturePad(resaId, type) {
+  document.getElementById('sigResaId').value=resaId;
+  document.getElementById('sigType').value=type;
+  document.querySelector('#modalSignature .modal-title').textContent='Signature client — '+(type==='depart'?'Départ':'Retour');
+  openModal('modalSignature');
+  setTimeout(function(){
+    var canvas=document.getElementById('sigCanvas');
+    var ratio=Math.max(window.devicePixelRatio||1,1);
+    canvas.width=canvas.offsetWidth*ratio;
+    canvas.height=canvas.offsetHeight*ratio;
+    canvas.getContext('2d').scale(ratio,ratio);
+    if(sigPad) sigPad.clear();
+    sigPad=new SignaturePad(canvas, {backgroundColor:'rgb(255,255,255)'});
+  }, 100);
+}
+
+function closeSignaturePad() {
+  closeModal('modalSignature');
+}
+
+function clearSignature() {
+  if(sigPad) sigPad.clear();
+}
+
+function saveSignature() {
+  if(!sigPad || sigPad.isEmpty()) return showToast('Veuillez signer avant de valider');
+  var resaId=document.getElementById('sigResaId').value;
+  var type=document.getElementById('sigType').value;
+  var field=type==='depart'?'signature_depart':'signature_retour';
+  var dataUrl=sigPad.toDataURL('image/png');
+  showLoader('Enregistrement de la signature...');
+  var path='reservations/'+resaId+'/signature_'+type+'_'+Date.now()+'.png';
+  uploadToStorage('daf-documents', path, dataUrl).then(function(res){
+    if(res.error) throw res.error;
+    var url=getPublicUrl('daf-documents', path);
+    var update={}; update[field]=url;
+    return sb.from('reservations').update(update).eq('id',resaId);
+  }).then(function(res2){
+    if(res2.error) throw res2.error;
+    return loadReservations();
+  }).then(function(){
+    hideLoader();
+    closeSignaturePad();
+    openResaDetail(resaId);
+    showToast('Signature enregistrée');
+  }).catch(function(e){hideLoader();showToast('Erreur: '+(e.message||JSON.stringify(e)));console.error(e);});
 }
 
 function saveDriverInfo(resaId) {
@@ -1348,6 +1439,90 @@ function genPdfConfirmation(resaId, type) {
 
   y=headerH+10;
 
+  // ===== HERO PHOTO VÉHICULE =====
+  var heroPromise=Promise.resolve(null);
+  if(veh && veh.photo_url) {
+    heroPromise=fetch(veh.photo_url).then(function(resp){return resp.blob();}).then(function(blob){
+      return new Promise(function(resolve){
+        var reader=new FileReader();
+        reader.onload=function(e){resolve(e.target.result);};
+        reader.readAsDataURL(blob);
+      });
+    }).catch(function(){return null;});
+  }
+
+  return heroPromise.then(function(heroImgData){
+
+  // Helper : ajoute la signature du client en bas du document (départ ou retour)
+  function addSignatureSection() {
+    var sigUrl=type==='depart'?r.signature_depart:r.signature_retour;
+    if(!sigUrl) return Promise.resolve();
+    return fetch(sigUrl).then(function(resp){return resp.blob();}).then(function(blob){
+      return new Promise(function(resolve){
+        var reader=new FileReader();
+        reader.onload=function(e){resolve(e.target.result);};
+        reader.readAsDataURL(blob);
+      });
+    }).then(function(sigImgData){
+      var sigW=70, sigH=28;
+      if(y+sigH+12>pageH-margin) { doc.addPage(); y=margin; }
+      y+=4;
+      doc.setFont(undefined,'bold');
+      doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+      doc.setFontSize(8);
+      doc.text('SIGNATURE CLIENT — '+(type==='depart'?'DÉPART':'RETOUR'), margin, y);
+      y+=3;
+      try {
+        doc.setDrawColor(220,224,230);
+        doc.setLineWidth(0.3);
+        doc.rect(margin,y,sigW,sigH);
+        doc.addImage(sigImgData,'PNG',margin,y,sigW,sigH);
+      } catch(e){}
+      y+=sigH+6;
+    }).catch(function(){});
+  }
+
+  if(heroImgData) {
+    var heroH=58;
+    try {
+      doc.addImage(heroImgData,'JPEG',margin,y,contentW,heroH);
+    } catch(e){}
+    doc.setDrawColor(220,224,230);
+    doc.setLineWidth(0.3);
+    doc.rect(margin,y,contentW,heroH);
+
+    // Bandeau dégradé sombre en bas de la photo pour la lisibilité du texte
+    var gradSteps=18;
+    for(var g=0;g<gradSteps;g++) {
+      var gh=heroH*0.55/gradSteps;
+      var gy=y+heroH-heroH*0.55+g*gh;
+      var alpha=(g/gradSteps);
+      doc.setFillColor(0,0,0);
+      try { doc.setGState(new window.jspdf.GState({opacity:alpha*0.55})); } catch(e){}
+      doc.rect(margin, gy, contentW, gh+0.3, 'F');
+    }
+    try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
+
+    // Modèle en gros et gras, en bas à gauche
+    doc.setFont(undefined,'bold');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(20);
+    doc.text(veh&&veh.modele?veh.modele:immat, margin+5, y+heroH-8);
+
+    // Note commerciale, juste au-dessus
+    if(veh && veh.note_commerciale) {
+      doc.setFont(undefined,'normal');
+      doc.setFontSize(9.5);
+      var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, contentW-10);
+      var maxLines=2;
+      if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
+      var noteY=y+heroH-8-(heroNoteLines.length*4.5)-2;
+      doc.text(heroNoteLines, margin+5, noteY);
+    }
+
+    y+=heroH+8;
+  }
+
   // Référence + date
   doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
   doc.setFontSize(8);
@@ -1480,41 +1655,63 @@ function genPdfConfirmation(resaId, type) {
     y+=lines.length*4.2+5;
   }
 
-  // PHOTOS (quart de page A4)
+  // PHOTOS (ratio réel par image, packing serré)
   var photos=type==='depart'?(r.photos_depart||[]):(r.photos_retour||[]);
   if(photos.length>0) {
     if(y>pageH-30) { doc.addPage(); y=margin; }
     y=sectionBox('PHOTOS '+(type==='depart'?'DÉPART':'RETOUR'), y);
 
-    var imgW=(contentW-4)/2;
-    var imgH=65;
+    var photoCols=2;
+    var cellW=(contentW-(photoCols-1)*3)/photoCols;
     var col=0;
 
     var loadPhotosPromises=photos.map(function(url){
       return fetch(url).then(function(r){return r.blob();}).then(function(blob){
         return new Promise(function(resolve){
           var reader=new FileReader();
-          reader.onload=function(e){resolve(e.target.result);};
+          reader.onload=function(e){
+            var dataUrl=e.target.result;
+            var img=new Image();
+            img.onload=function(){
+              resolve({data:dataUrl, w:img.naturalWidth, h:img.naturalHeight});
+            };
+            img.onerror=function(){ resolve({data:dataUrl, w:cellW, h:cellW*0.74}); };
+            img.src=dataUrl;
+          };
           reader.readAsDataURL(blob);
         });
       }).catch(function(){return null;});
     });
 
-    Promise.all(loadPhotosPromises).then(function(imgDatas){
-      for(var i=0;i<imgDatas.length;i++) {
-        if(!imgDatas[i]) continue;
-        if(y+imgH>pageH-margin) { doc.addPage(); y=margin; col=0; }
-        var x=margin+(col*(imgW+4));
-        try {
-          doc.setDrawColor(220,224,230);
-          doc.setLineWidth(0.3);
-          doc.rect(x,y,imgW,imgH);
-          doc.addImage(imgDatas[i],'JPEG',x,y,imgW,imgH);
-        } catch(e){}
-        col++;
-        if(col>=2) { col=0; y+=imgH+4; }
+    Promise.all(loadPhotosPromises).then(function(imgInfos){
+      var rowItems=[];
+      function flushRow() {
+        if(rowItems.length===0) return;
+        var rowH=0;
+        for(var ri=0;ri<rowItems.length;ri++) if(rowItems[ri].h>rowH) rowH=rowItems[ri].h;
+        if(y+rowH>pageH-margin) { doc.addPage(); y=margin; }
+        for(var ri2=0;ri2<rowItems.length;ri2++) {
+          var it=rowItems[ri2];
+          var x=margin+ri2*(cellW+3);
+          try {
+            doc.setDrawColor(220,224,230);
+            doc.setLineWidth(0.3);
+            doc.rect(x,y,cellW,it.h);
+            doc.addImage(it.data,'JPEG',x,y,cellW,it.h);
+          } catch(e){}
+        }
+        y+=rowH+3;
+        rowItems=[];
       }
-      if(col>0) y+=imgH+4;
+
+      for(var i=0;i<imgInfos.length;i++) {
+        if(!imgInfos[i]) continue;
+        var ratio=imgInfos[i].h/imgInfos[i].w;
+        var cellH=cellW*ratio;
+        rowItems.push({data:imgInfos[i].data, h:cellH});
+        if(rowItems.length>=photoCols) flushRow();
+      }
+      flushRow();
 
       // Rapport conso si retour
       if(type==='retour') {
@@ -1551,52 +1748,85 @@ function genPdfConfirmation(resaId, type) {
             return fetch(item.url).then(function(resp){return resp.blob();}).then(function(blob){
               return new Promise(function(resolve){
                 var reader=new FileReader();
-                reader.onload=function(e){resolve(e.target.result);};
+                reader.onload=function(e){
+                  var dataUrl=e.target.result;
+                  var img=new Image();
+                  img.onload=function(){
+                    resolve({data:dataUrl, w:img.naturalWidth, h:img.naturalHeight});
+                  };
+                  img.onerror=function(){ resolve({data:dataUrl, w:100, h:74}); };
+                  img.src=dataUrl;
+                };
                 reader.readAsDataURL(blob);
               });
             }).catch(function(){return null;});
           });
 
-          return Promise.all(loadDegPromises).then(function(degImgDatas){
-            var degImgW=55, degImgH=45, boxPad=4;
-            for(var d=0;d<degImgDatas.length;d++) {
-              var boxH=degImgH+2*boxPad;
-              if(y+boxH>pageH-margin) { doc.addPage(); y=margin; }
+          return Promise.all(loadDegPromises).then(function(degImgInfos){
+            var degCols=2;
+            var boxGap=3, boxPad=3;
+            var boxW=(contentW-(degCols-1)*boxGap)/degCols;
+            var degImgW=boxW-2*boxPad;
+            var dcol=0;
+            var rowItems=[];
 
-              // Encadré coloré autour de chaque dégradation
-              doc.setFillColor(COL_ALERT_BG[0],COL_ALERT_BG[1],COL_ALERT_BG[2]);
-              doc.setDrawColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
-              doc.setLineWidth(0.6);
-              doc.roundedRect(margin, y, contentW, boxH, 2, 2, 'FD');
+            function flushDegRow() {
+              if(rowItems.length===0) return;
+              var rowH=0;
+              for(var ri=0;ri<rowItems.length;ri++) if(rowItems[ri].boxH>rowH) rowH=rowItems[ri].boxH;
+              if(y+rowH>pageH-margin) { doc.addPage(); y=margin; }
+              for(var ri2=0;ri2<rowItems.length;ri2++) {
+                var it=rowItems[ri2];
+                var bx=margin+ri2*(boxW+boxGap);
 
-              var imgX=margin+boxPad, imgY=y+boxPad;
-              if(degImgDatas[d]) {
-                try {
-                  doc.setDrawColor(255,255,255);
-                  doc.setLineWidth(0.5);
-                  doc.rect(imgX,imgY,degImgW,degImgH);
-                  doc.addImage(degImgDatas[d],'JPEG',imgX,imgY,degImgW,degImgH);
-                } catch(e){}
+                doc.setFillColor(COL_ALERT_BG[0],COL_ALERT_BG[1],COL_ALERT_BG[2]);
+                doc.setDrawColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
+                doc.setLineWidth(0.6);
+                doc.roundedRect(bx, y, boxW, rowH, 2, 2, 'FD');
+
+                var imgX=bx+boxPad, imgY=y+boxPad;
+                if(it.info) {
+                  try {
+                    doc.setDrawColor(255,255,255);
+                    doc.setLineWidth(0.5);
+                    doc.rect(imgX,imgY,degImgW,it.imgH);
+                    doc.addImage(it.info.data,'JPEG',imgX,imgY,degImgW,it.imgH);
+                  } catch(e){}
+                }
+
+                var textY=imgY+it.imgH+5;
+                doc.setFont(undefined,'bold');
+                doc.setTextColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
+                doc.setFontSize(9.5);
+                doc.text('Dégradation '+(it.idx+1), imgX, textY);
+                doc.setFont(undefined,'normal');
+                doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+                doc.setFontSize(9);
+                doc.text(it.noteLines, imgX, textY+4);
               }
-
-              var textX=imgX+degImgW+6;
-              doc.setFont(undefined,'bold');
-              doc.setTextColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
-              doc.setFontSize(10);
-              doc.text('Dégradation '+(d+1), textX, imgY+6);
-              doc.setFont(undefined,'normal');
-              doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
-              doc.setFontSize(9.5);
-              var noteLines=doc.splitTextToSize(pdg[d].note||'(sans description)', contentW-degImgW-3*boxPad-6);
-              doc.text(noteLines, textX, imgY+13);
-
-              y+=boxH+6;
+              y+=rowH+5;
+              rowItems=[];
             }
 
-            addFooter(doc, pageW, pageH, margin);
-            hideLoader();
-            doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-            showToast('PDF généré');
+            for(var d=0;d<degImgInfos.length;d++) {
+              var info=degImgInfos[d];
+              var ratio=info?(info.h/info.w):0.74;
+              var imgH=degImgW*ratio;
+              doc.setFont(undefined,'bold');
+              doc.setFontSize(9.5);
+              var noteLines=doc.splitTextToSize(pdg[d].note||'(sans description)', degImgW);
+              var boxH=2*boxPad+imgH+5+noteLines.length*4;
+              rowItems.push({info:info, imgH:imgH, noteLines:noteLines, boxH:boxH, idx:d});
+              if(rowItems.length>=degCols) flushDegRow();
+            }
+            flushDegRow();
+
+            addSignatureSection().then(function(){
+              addFooter(doc, pageW, pageH, margin);
+              hideLoader();
+              doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
+              showToast('PDF généré');
+            });
           }).catch(function(e){
             addFooter(doc, pageW, pageH, margin);
             hideLoader();
@@ -1606,10 +1836,12 @@ function genPdfConfirmation(resaId, type) {
         }
       }
 
-      addFooter(doc, pageW, pageH, margin);
-      hideLoader();
-      doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-      showToast('PDF généré');
+      addSignatureSection().then(function(){
+        addFooter(doc, pageW, pageH, margin);
+        hideLoader();
+        doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
+        showToast('PDF généré');
+      });
     }).catch(function(e){
       addFooter(doc, pageW, pageH, margin);
       hideLoader();
@@ -1617,11 +1849,14 @@ function genPdfConfirmation(resaId, type) {
       showToast('PDF généré (sans photos)');
     });
   } else {
-    addFooter(doc, pageW, pageH, margin);
-    hideLoader();
-    doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-    showToast('PDF généré');
+    addSignatureSection().then(function(){
+      addFooter(doc, pageW, pageH, margin);
+      hideLoader();
+      doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
+      showToast('PDF généré');
+    });
   }
+  }); // fin heroPromise.then
 }
 
 // Pied de page sobre sur toutes les pages du document
@@ -1856,9 +2091,11 @@ function renderVehicleList() {
     }
 
     html+='<div class="card">'+
+      (v.photo_url?'<img src="'+v.photo_url+'" alt="" style="width:100%;height:120px;object-fit:cover;display:block">':'')+
       '<div class="card-header">'+
       '<div><div class="card-title">'+esc(v.immat)+'</div><div class="card-sub">'+(v.modele?esc(v.modele)+' · ':'')+resaCount+' réservation(s)</div></div>'+
       '<div style="display:flex;gap:6px">'+
+      '<button class="btn btn-light btn-sm" onclick="openVehicleHistory(\''+v.id+'\')">🕒 Historique</button>'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleDocs(\''+v.id+'\')">📄 Docs</button>'+
       '<button class="btn btn-light btn-sm" onclick="editVehicle(\''+v.id+'\')">✏️</button></div></div>'+
       '<div class="card-body">'+
@@ -1877,6 +2114,15 @@ function isVehicleInAtelier(v, dateStr) {
   return dateStr>=d && dateStr<=f;
 }
 
+function previewVehiclePhoto(input) {
+  var file=input.files&&input.files[0]; if(!file) return;
+  compressPhoto(file, function(base64){
+    document.getElementById('vehPhotoPreview').src=base64;
+    document.getElementById('vehPhotoPreviewWrap').style.display='block';
+    document.getElementById('vehPhotoUrl').value=base64; // base64 temporaire, sera uploadé si nouveau
+  });
+}
+
 function openAddVehicle() {
   document.getElementById('modalVehicleTitle').textContent='Nouveau véhicule';
   document.getElementById('vehImmat').value='';
@@ -1888,6 +2134,10 @@ function openAddVehicle() {
   document.getElementById('vehAtelierDebut').value='';
   document.getElementById('vehAtelierFin').value='';
   document.getElementById('vehMotif').value='';
+  document.getElementById('vehNote').value='';
+  document.getElementById('vehPhotoUrl').value='';
+  document.getElementById('vehPhotoInput').value='';
+  document.getElementById('vehPhotoPreviewWrap').style.display='none';
   document.getElementById('editVehicleId').value='';
   openModal('modalVehicle');
 }
@@ -1904,6 +2154,15 @@ function editVehicle(id) {
   document.getElementById('vehAtelierDebut').value=v.atelier_debut?v.atelier_debut.split('T')[0]:'';
   document.getElementById('vehAtelierFin').value=v.atelier_fin?v.atelier_fin.split('T')[0]:'';
   document.getElementById('vehMotif').value=v.motif_blocage||'';
+  document.getElementById('vehNote').value=v.note_commerciale||'';
+  document.getElementById('vehPhotoUrl').value=v.photo_url||'';
+  document.getElementById('vehPhotoInput').value='';
+  if(v.photo_url) {
+    document.getElementById('vehPhotoPreview').src=v.photo_url;
+    document.getElementById('vehPhotoPreviewWrap').style.display='block';
+  } else {
+    document.getElementById('vehPhotoPreviewWrap').style.display='none';
+  }
   document.getElementById('editVehicleId').value=id;
   openModal('modalVehicle');
 }
@@ -1921,6 +2180,7 @@ function saveVehicle() {
   var data={
     immat:immat,
     modele:document.getElementById('vehModele').value.trim()||null,
+    note_commerciale:document.getElementById('vehNote').value.trim()||null,
     kilometrage_actuel:parseInt(document.getElementById('vehKm').value)||0,
     date_controle_technique:document.getElementById('vehCT').value||null,
     date_chronotachygraphe:document.getElementById('vehChrono').value||null,
@@ -1931,10 +2191,26 @@ function saveVehicle() {
   };
 
   showLoader('Enregistrement...');
-  var promise;
-  if(editId) promise=sb.from('vehicles').update(data).eq('id',editId);
-  else promise=sb.from('vehicles').insert(data).select();
-  promise.then(function(res){
+
+  var photoVal=document.getElementById('vehPhotoUrl').value;
+  var photoPromise;
+  if(photoVal && photoVal.indexOf('data:')===0) {
+    var path='vehicles/'+immat.replace(/[^A-Z0-9]/g,'')+'_'+Date.now()+'.jpg';
+    photoPromise=uploadToStorage('daf-documents', path, photoVal).then(function(res){
+      if(res.error) throw res.error;
+      data.photo_url=getPublicUrl('daf-documents', path);
+    });
+  } else {
+    data.photo_url=photoVal||null;
+    photoPromise=Promise.resolve();
+  }
+
+  photoPromise.then(function(){
+    var promise;
+    if(editId) promise=sb.from('vehicles').update(data).eq('id',editId);
+    else promise=sb.from('vehicles').insert(data).select();
+    return promise;
+  }).then(function(res){
     if(res.error) throw res.error;
     return loadVehicles();
   }).then(function(){
@@ -1981,6 +2257,35 @@ function openVehicleDocs(vehicleId) {
   }
   document.getElementById('modalVehicleDocsBody').innerHTML=html;
   openModal('modalVehicleDocs');
+}
+
+function openVehicleHistory(vehicleId) {
+  var v=getVehicle(vehicleId); if(!v) return;
+  document.getElementById('modalVehicleHistoryTitle').textContent='Historique · '+v.immat;
+
+  var list=APP.reservations.filter(function(r){return r.vehicle_id===vehicleId;});
+  list.sort(function(a,b){return b.date_start.localeCompare(a.date_start);});
+
+  var html='';
+  if(list.length===0) {
+    html='<div class="empty-state"><div class="empty-icon">🕒</div><div class="empty-text">Aucune démonstration</div></div>';
+  } else {
+    for(var i=0;i<list.length;i++) {
+      var r=list[i];
+      var status=getResaStatus(r);
+      var statusLabels={active:'En cours',upcoming:'À venir',past:'Terminée'};
+      var statusCls={active:'status-active',upcoming:'status-upcoming',past:'status-past'};
+      html+='<div class="doc-row" onclick="closeModal(\'modalVehicleHistory\');openResaDetail(\''+r.id+'\')" style="cursor:pointer">'+
+        '<div class="doc-row-left" style="flex:1;flex-direction:column;align-items:flex-start;gap:2px">'+
+        '<div style="display:flex;align-items:center;gap:6px">'+
+        '<span style="font-size:12px;font-weight:700">'+(r.entreprise?esc(r.entreprise):'(Sans entreprise)')+'</span>'+
+        '<span class="status-badge '+statusCls[status]+'">'+statusLabels[status]+'</span></div>'+
+        '<span style="font-size:11px;color:var(--gray)">📅 '+formatDate(r.date_start)+' → '+formatDate(r.date_end)+'</span>'+
+        '</div></div>';
+    }
+  }
+  document.getElementById('modalVehicleHistoryBody').innerHTML=html;
+  openModal('modalVehicleHistory');
 }
 
 function uploadVehicleDoc(vehicleId, vkey, input) {
@@ -2037,6 +2342,7 @@ function updateStorageBar() {
   sb.storage.from('daf-documents').list('', {limit:1000}).then(function(res){
     if(res.error) return;
     document.getElementById('storageBarWrap').style.display='block';
+    updateHeaderOffset();
     // Estimation grossière basée sur le nombre de fichiers
     var count=(res.data||[]).length;
     var estimatedMB=count*0.5; // 500Ko par fichier en moyenne
@@ -2053,7 +2359,7 @@ function updateStorageBar() {
 // =============================================
 // INIT
 // =============================================
-var overlayIds=['modalNewResa','modalResaDetail','modalVehicle','modalVehicleDocs','modalArchive'];
+var overlayIds=['modalNewResa','modalResaDetail','modalVehicle','modalVehicleDocs','modalVehicleHistory','modalArchive','modalSignature'];
 for(var oi=0;oi<overlayIds.length;oi++) {
   (function(id){
     document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});
@@ -2069,7 +2375,20 @@ if(savedUser) {
   document.getElementById('userChip').textContent=savedUser;
   document.getElementById('resaVendeur').value=savedUser;
   loadAll();
+  updateHeaderOffset();
 }
+
+// =============================================
+// HEADER OFFSET (pour sticky page-header sous app-header)
+// =============================================
+function updateHeaderOffset() {
+  var header=document.getElementById('appHeader');
+  if(!header) return;
+  var h=header.offsetHeight;
+  document.documentElement.style.setProperty('--header-h', h+'px');
+}
+window.addEventListener('resize', updateHeaderOffset);
+window.addEventListener('orientationchange', function(){ setTimeout(updateHeaderOffset, 200); });
 </script>
 </body>
 </html>
