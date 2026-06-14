@@ -1081,7 +1081,7 @@ function uploadPhotos(resaId, type, input) {
               showToast('Photo(s) ajoutée(s)');
             });
           }
-        }).catch(function(e){hideLoader();showToast('Erreur photo');console.error(e);});
+        }).catch(function(e){hideLoader();showToast('Erreur photo: '+(e.message||JSON.stringify(e)));console.error('uploadPhotos error:',e);});
       });
     })(files[i]);
   }
@@ -1357,7 +1357,9 @@ function genPdfConfirmation(resaId, type) {
     {label:'Permis de conduire chauffeur', source:'resa', key:'doc_'+slugify('Permis Chauffeur')},
     {label:'Mémo assurance', source:'resa', key:'doc_'+slugify('Assurance')}
   ];
-  var RETOUR_DOCS = RESA_DOCS.map(function(label){return {label:label, source:'resa', key:'doc_'+slugify(label)};});
+  var RETOUR_DOCS = RESA_DOCS.filter(function(label){
+    return label!=='Assurance' && label!=='Permis Chauffeur';
+  }).map(function(label){return {label:label, source:'resa', key:'doc_'+slugify(label)};});
 
   var docList = type==='depart'?DEPART_DOCS:RETOUR_DOCS;
   var docLabel = type==='depart'?'DOCUMENTS À REMETTRE AU DÉPART':'RÉCAPITULATIF DOCUMENTS';
