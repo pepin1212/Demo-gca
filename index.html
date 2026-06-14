@@ -109,17 +109,19 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .cal-day-label { text-align: center; font-size: 9px; font-weight: 700; color: var(--gray); padding: 3px 0; text-transform: uppercase; }
 .cal-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
 .cal-day.today { font-weight: 800; color: var(--blue); border: 1.5px solid var(--blue); }
-.cal-day.v1 { background: var(--blue); color: white; }
-.cal-day.v2 { background: var(--orange); color: white; }
 .cal-day.both { background: linear-gradient(135deg, var(--blue) 50%, var(--orange) 50%); color: white; }
 .cal-day.past { color: #d1d5db; cursor: default; }
+.cal-day.atelier { background: repeating-linear-gradient(45deg, #94a3b8, #94a3b8 4px, #cbd5e1 4px, #cbd5e1 8px); color: white; }
+
+/* ATELIER BADGE */
+.atelier-badge { display: inline-block; background: #94a3b8; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; margin-top: 6px; }
+.atelier-banner { background: #FEF3C7; border: 1px solid #F59E0B; border-radius: var(--radius-sm); padding: 8px 12px; margin-top: 8px; font-size: 12px; color: #92400E; font-weight: 600; }
 .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--gray); }
 .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
 
 /* RESA CARD */
 .resa-card { background: white; border-radius: var(--radius); border-left: 4px solid var(--blue); padding: 12px; margin-bottom: 10px; box-shadow: var(--shadow); cursor: pointer; }
-.resa-card.v2 { border-left-color: var(--orange); }
 .resa-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--blue); color: white; display: inline-block; }
 .resa-badge.orange { background: var(--orange); }
 .status-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
@@ -151,12 +153,12 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .info-value { font-weight: 600; }
 
 /* VEHICLE SELECTOR */
-.vehicle-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.vehicle-selector { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-bottom: 14px; max-height: 280px; overflow-y: auto; }
 .veh-select-card { border: 2px solid var(--gray-light); border-radius: var(--radius); padding: 12px; text-align: center; cursor: pointer; }
-.veh-select-card.sel-v1 { border-color: var(--blue); background: #EEF2FF; }
-.veh-select-card.sel-v2 { border-color: var(--orange); background: #FFF7ED; }
+.veh-select-card.sel { border-color: var(--blue); background: #EEF2FF; }
 .veh-immat { font-size: 15px; font-weight: 800; letter-spacing: 1px; }
 .veh-label { font-size: 10px; color: var(--gray); margin-top: 2px; }
+.veh-select-card.disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* TABS */
 .tabs { display: flex; background: var(--gray-light); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 14px; }
@@ -266,11 +268,7 @@ input[type="file"] { display: none; }
         <div class="cal-month" id="calMonthLabel"></div>
         <button class="cal-nav" onclick="changeMonth(1)">›</button>
       </div>
-      <div class="legend">
-        <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div><span id="leg1">Véhicule 1</span></div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div><span id="leg2">Véhicule 2</span></div>
-        <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,var(--blue) 50%,var(--orange) 50%)"></div>Les deux</div>
-      </div>
+      <div class="legend" id="legendDynamic"></div>
       <div class="cal-grid" id="calGrid"></div>
     </div>
   </div>
@@ -387,6 +385,30 @@ input[type="file"] { display: none; }
     </div>
     <div class="modal-body">
       <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="vehImmat" placeholder="AB-123-CD" style="text-transform:uppercase;font-size:18px;font-weight:700;letter-spacing:2px"></div>
+      <div class="form-group"><label class="form-label">Modèle</label><input type="text" class="form-input" id="vehModele" placeholder="ex: XF 480"></div>
+      <div class="form-group"><label class="form-label">Kilométrage actuel</label><input type="number" class="form-input" id="vehKm" placeholder="0"></div>
+      <div class="section-title">Échéances</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">Contrôle technique</label><input type="date" class="form-input" id="vehCT"></div>
+        <div class="form-group"><label class="form-label">Chronotachygraphe</label><input type="date" class="form-input" id="vehChrono"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Révision</label><input type="date" class="form-input" id="vehRevision"></div>
+      <div class="section-title">Indisponibilité atelier</div>
+      <p style="font-size:11px;color:var(--gray);margin-bottom:8px">Si renseigné, le véhicule sera indisponible et bloqué dans le planning sur cette période.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label class="form-label">Début atelier</label><input type="date" class="form-input" id="vehAtelierDebut"></div>
+        <div class="form-group"><label class="form-label">Fin atelier</label><input type="date" class="form-input" id="vehAtelierFin"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Motif blocage</label>
+        <select class="form-input" id="vehMotif">
+          <option value="">— Aucun —</option>
+          <option value="Contrôle technique">Contrôle technique</option>
+          <option value="Chronotachygraphe">Chronotachygraphe</option>
+          <option value="Révision">Révision</option>
+          <option value="Réparation">Réparation</option>
+          <option value="Immobilisation">Immobilisation diverse</option>
+        </select>
+      </div>
       <input type="hidden" id="editVehicleId">
       <button class="btn btn-primary btn-full" onclick="saveVehicle()">Enregistrer</button>
     </div>
@@ -467,7 +489,6 @@ function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]/g,'_'); }
 function esc(s) { if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function getVehicle(id) { for(var i=0;i<APP.vehicles.length;i++) if(APP.vehicles[i].id===id) return APP.vehicles[i]; return null; }
 function getResa(id) { for(var i=0;i<APP.reservations.length;i++) if(APP.reservations[i].id===id) return APP.reservations[i]; return null; }
-function isV2(vehicleId) { return APP.vehicles.length>1 && APP.vehicles[1] && APP.vehicles[1].id===vehicleId; }
 function getResaStatus(r) { var t=toDateStr(new Date()); if(r.date_end<t) return 'past'; if(r.date_start<=t) return 'active'; return 'upcoming'; }
 
 function showToast(msg) {
@@ -614,6 +635,8 @@ function changeMonth(dir) {
   renderCalendar();
 }
 
+var CAL_COLORS = ['#003087','#E8601C','#10B981','#8B5CF6','#EC4899','#F59E0B','#06B6D4','#84CC16'];
+
 function isDateReserved(dateStr, vehicleId) {
   if(!vehicleId) return false;
   for(var i=0;i<APP.reservations.length;i++) {
@@ -631,8 +654,6 @@ function renderCalendar() {
   var firstDay=(new Date(m.getFullYear(),m.getMonth(),1).getDay()+6)%7;
   var daysInMonth=new Date(m.getFullYear(),m.getMonth()+1,0).getDate();
   var today=new Date(); today.setHours(0,0,0,0);
-  var v1id=APP.vehicles.length>0?APP.vehicles[0].id:null;
-  var v2id=APP.vehicles.length>1?APP.vehicles[1].id:null;
 
   var html='<div class="cal-day-label">L</div><div class="cal-day-label">M</div><div class="cal-day-label">M</div><div class="cal-day-label">J</div><div class="cal-day-label">V</div><div class="cal-day-label">S</div><div class="cal-day-label">D</div>';
   for(var i=0;i<firstDay;i++) html+='<div></div>';
@@ -640,18 +661,44 @@ function renderCalendar() {
     var date=new Date(m.getFullYear(),m.getMonth(),d);
     var ds=toDateStr(date);
     var cls=['cal-day'];
+    var style='';
     if(date.getTime()===today.getTime()) cls.push('today');
     if(date<today) cls.push('past');
-    var hv1=isDateReserved(ds,v1id), hv2=isDateReserved(ds,v2id);
-    if(hv1&&hv2) cls.push('both');
-    else if(hv1) cls.push('v1');
-    else if(hv2) cls.push('v2');
-    html+='<div class="'+cls.join(' ')+'" onclick="calClick(\''+ds+'\')">'+d+'</div>';
+
+    // Vérifier atelier (priorité visuelle)
+    var inAtelier=false;
+    for(var vi=0;vi<APP.vehicles.length;vi++) {
+      if(isVehicleInAtelier(APP.vehicles[vi], ds)) { inAtelier=true; break; }
+    }
+
+    // Véhicules réservés ce jour
+    var reservedVehicles=[];
+    for(var vi=0;vi<APP.vehicles.length;vi++) {
+      if(isDateReserved(ds, APP.vehicles[vi].id)) reservedVehicles.push(vi);
+    }
+
+    if(reservedVehicles.length>1) {
+      cls.push('both');
+    } else if(reservedVehicles.length===1) {
+      var color=CAL_COLORS[reservedVehicles[0]%CAL_COLORS.length];
+      style='background:'+color+';color:white;';
+    } else if(inAtelier) {
+      cls.push('atelier');
+    }
+
+    html+='<div class="'+cls.join(' ')+'" style="'+style+'" onclick="calClick(\''+ds+'\')">'+d+'</div>';
   }
   document.getElementById('calGrid').innerHTML=html;
 
-  if(APP.vehicles.length>0) document.getElementById('leg1').textContent=APP.vehicles[0].immat||'Véhicule 1';
-  if(APP.vehicles.length>1) document.getElementById('leg2').textContent=APP.vehicles[1].immat||'Véhicule 2';
+  // Légende dynamique
+  var legHtml='';
+  for(var vi=0;vi<APP.vehicles.length;vi++) {
+    var color=CAL_COLORS[vi%CAL_COLORS.length];
+    legHtml+='<div class="legend-item"><div class="legend-dot" style="background:'+color+'"></div><span>'+esc(APP.vehicles[vi].immat||('Véhicule '+(vi+1)))+'</span></div>';
+  }
+  if(APP.vehicles.length>1) legHtml+='<div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,'+CAL_COLORS[0]+' 50%,'+CAL_COLORS[1]+' 50%)"></div>Plusieurs</div>';
+  legHtml+='<div class="legend-item"><div class="legend-dot" style="background:repeating-linear-gradient(45deg,#94a3b8,#94a3b8 2px,#cbd5e1 2px,#cbd5e1 4px)"></div>🔧 Atelier</div>';
+  document.getElementById('legendDynamic').innerHTML=legHtml;
 }
 
 function calClick(dateStr) {
@@ -678,7 +725,9 @@ function renderPlanning() { renderCalendar(); renderUpcoming(); }
 function buildResaCard(r) {
   var veh=getVehicle(r.vehicle_id);
   var immat=veh?veh.immat:'?';
-  var v2=isV2(r.vehicle_id);
+  var vIndex=-1;
+  for(var i=0;i<APP.vehicles.length;i++) if(APP.vehicles[i].id===r.vehicle_id) {vIndex=i;break;}
+  var color=vIndex>=0?CAL_COLORS[vIndex%CAL_COLORS.length]:'#003087';
   var status=getResaStatus(r);
   var statusLabels={active:'En cours',upcoming:'À venir',past:'Terminée'};
   var statusCls={active:'status-active',upcoming:'status-upcoming',past:'status-past'};
@@ -691,9 +740,9 @@ function buildResaCard(r) {
   docsHtml+='<span class="doc-chip '+(pd>0?'ok':'missing')+'">📷D('+pd+')</span>';
   docsHtml+='<span class="doc-chip '+(pr>0?'ok':'missing')+'">📷R('+pr+')</span>';
 
-  return '<div class="resa-card'+(v2?' v2':'')+'" onclick="openResaDetail(\''+r.id+'\')">'+
+  return '<div class="resa-card" style="border-left-color:'+color+'" onclick="openResaDetail(\''+r.id+'\')">'+
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+
-    '<span class="resa-badge'+(v2?' orange':'')+'">'+esc(immat)+'</span>'+
+    '<span class="resa-badge" style="background:'+color+'">'+esc(immat)+'</span>'+
     '<span class="status-badge '+statusCls[status]+'">'+statusLabels[status]+'</span></div>'+
     '<div class="resa-name">'+esc(r.vendeur)+'</div>'+
     '<div class="resa-dates">📅 '+formatDate(r.date_start)+' → '+formatDate(r.date_end)+'</div>'+
@@ -737,10 +786,32 @@ function openNewResa() {
 
 function renderVehSelector() {
   var html='';
+  var today=toDateStr(new Date());
+  var dateStart=document.getElementById('resaStart').value;
+  var dateEnd=document.getElementById('resaEnd').value;
+
   for(var i=0;i<APP.vehicles.length;i++) {
     var v=APP.vehicles[i], sel=v.id===APP.selectedVehicleId;
-    html+='<div class="veh-select-card'+(sel?(i===0?' sel-v1':' sel-v2'):'')+'" onclick="selectVeh(\''+v.id+'\')">'+
-      '<div class="veh-immat">'+esc(v.immat)+'</div><div class="veh-label">Véhicule '+(i+1)+'</div></div>';
+    var blocked=false, blockReason='';
+
+    if(v.atelier_debut && v.atelier_fin) {
+      var ad=v.atelier_debut.split('T')[0], af=v.atelier_fin.split('T')[0];
+      if(dateStart && dateEnd) {
+        if(dateStart<=af && dateEnd>=ad) { blocked=true; blockReason='Atelier'; }
+      } else if(isVehicleInAtelier(v, today)) {
+        blocked=true; blockReason='Atelier';
+      }
+    }
+
+    var cardCls='veh-select-card';
+    if(sel && !blocked) cardCls+=' sel';
+    if(blocked) cardCls+=' disabled';
+
+    html+='<div class="'+cardCls+'" onclick="'+(blocked?'showToast(\'Véhicule indisponible (atelier)\')':'selectVeh(\''+v.id+'\')')+'">'+
+      '<div class="veh-immat">'+esc(v.immat)+'</div>'+
+      '<div class="veh-label">'+(v.modele?esc(v.modele):'Véhicule '+(i+1))+'</div>'+
+      (blocked?'<div class="atelier-badge">🔧 '+blockReason+'</div>':'')+
+      '</div>';
   }
   if(APP.vehicles.length===0) html='<div style="grid-column:span 2;text-align:center;color:var(--gray);font-size:12px;padding:16px">Ajoutez d\'abord un véhicule</div>';
   document.getElementById('vehSelectorModal').innerHTML=html;
@@ -806,7 +877,6 @@ function openResaDetail(id) {
   if(!r) return;
   var veh=getVehicle(r.vehicle_id);
   var immat=veh?veh.immat:'?';
-  var v2=isV2(r.vehicle_id);
   var status=getResaStatus(r);
   var statusLabels={active:'En cours',upcoming:'À venir',past:'Terminée'};
   var statusCls={active:'status-active',upcoming:'status-upcoming',past:'status-past'};
@@ -1318,7 +1388,6 @@ function renderDocsList() {
     var r=APP.reservations[ri];
     var veh=getVehicle(r.vehicle_id);
     var immat=veh?veh.immat:'?';
-    var v2=isV2(r.vehicle_id);
 
     // Documents
     if(APP.docsFilter==='all'||APP.docsFilter==='contrat'||APP.docsFilter==='etat') {
@@ -1474,32 +1543,64 @@ function renderVehicleList() {
   if(APP.vehicles.length===0) {
     html='<div class="empty-state"><div class="empty-icon">🚛</div><div class="empty-text">Aucun véhicule</div><div class="empty-sub">Ajoutez vos véhicules de démonstration</div></div>';
   }
+  var today=toDateStr(new Date());
   for(var i=0;i<APP.vehicles.length;i++) {
     var v=APP.vehicles[i];
-    var v2=i===1;
     var resaCount=APP.reservations.filter(function(r){return r.vehicle_id===v.id;}).length;
     var docsHtml='';
     for(var k=0;k<VEH_DOCS.length;k++) {
       var vkey='doc_'+slugify(VEH_DOCS[k]);
       docsHtml+='<span class="doc-chip '+(v[vkey]?'ok':'missing')+'">'+VEH_DOCS[k]+'</span>';
     }
+
+    var infoHtml='';
+    if(v.modele) infoHtml+='<div class="info-row"><span class="info-label">Modèle</span><span class="info-value">'+esc(v.modele)+'</span></div>';
+    if(v.kilometrage_actuel) infoHtml+='<div class="info-row"><span class="info-label">Kilométrage</span><span class="info-value">'+v.kilometrage_actuel.toLocaleString('fr-FR')+' km</span></div>';
+    if(v.date_controle_technique) infoHtml+='<div class="info-row"><span class="info-label">Contrôle technique</span><span class="info-value">'+formatDate(v.date_controle_technique)+'</span></div>';
+    if(v.date_chronotachygraphe) infoHtml+='<div class="info-row"><span class="info-label">Chronotachygraphe</span><span class="info-value">'+formatDate(v.date_chronotachygraphe)+'</span></div>';
+    if(v.date_revision) infoHtml+='<div class="info-row"><span class="info-label">Révision</span><span class="info-value">'+formatDate(v.date_revision)+'</span></div>';
+
+    var atelierHtml='';
+    var inAtelier=isVehicleInAtelier(v, today);
+    if(inAtelier) {
+      atelierHtml='<div class="atelier-banner">🔧 Indisponible (atelier) du '+formatDate(v.atelier_debut.split('T')[0])+' au '+formatDate(v.atelier_fin.split('T')[0])+(v.motif_blocage?' — '+esc(v.motif_blocage):'')+'</div>';
+    } else if(v.atelier_debut && v.atelier_fin && v.atelier_fin.split('T')[0]>=today) {
+      atelierHtml='<div class="atelier-banner">🔧 Atelier programmé : '+formatDate(v.atelier_debut.split('T')[0])+' → '+formatDate(v.atelier_fin.split('T')[0])+(v.motif_blocage?' — '+esc(v.motif_blocage):'')+'</div>';
+    }
+
     html+='<div class="card">'+
-      '<div class="card-header'+(v2?' orange':'')+'">'+
-      '<div><div class="card-title">'+esc(v.immat)+'</div><div class="card-sub">Véhicule '+(i+1)+' · '+resaCount+' réservation(s)</div></div>'+
+      '<div class="card-header">'+
+      '<div><div class="card-title">'+esc(v.immat)+'</div><div class="card-sub">'+(v.modele?esc(v.modele)+' · ':'')+resaCount+' réservation(s)</div></div>'+
       '<div style="display:flex;gap:6px">'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleDocs(\''+v.id+'\')">📄 Docs</button>'+
       '<button class="btn btn-light btn-sm" onclick="editVehicle(\''+v.id+'\')">✏️</button></div></div>'+
       '<div class="card-body">'+
-      '<div class="docs-chips">'+docsHtml+'</div>'+
+      infoHtml+
+      '<div class="docs-chips" style="margin-top:8px">'+docsHtml+'</div>'+
+      atelierHtml+
       '<button class="btn btn-danger btn-sm" style="margin-top:10px" onclick="deleteVehicle(\''+v.id+'\')">🗑️ Supprimer</button>'+
       '</div></div>';
   }
   document.getElementById('vehicleList').innerHTML=html;
 }
 
+function isVehicleInAtelier(v, dateStr) {
+  if(!v.atelier_debut||!v.atelier_fin) return false;
+  var d=v.atelier_debut.split('T')[0], f=v.atelier_fin.split('T')[0];
+  return dateStr>=d && dateStr<=f;
+}
+
 function openAddVehicle() {
   document.getElementById('modalVehicleTitle').textContent='Nouveau véhicule';
   document.getElementById('vehImmat').value='';
+  document.getElementById('vehModele').value='';
+  document.getElementById('vehKm').value='';
+  document.getElementById('vehCT').value='';
+  document.getElementById('vehChrono').value='';
+  document.getElementById('vehRevision').value='';
+  document.getElementById('vehAtelierDebut').value='';
+  document.getElementById('vehAtelierFin').value='';
+  document.getElementById('vehMotif').value='';
   document.getElementById('editVehicleId').value='';
   openModal('modalVehicle');
 }
@@ -1508,6 +1609,14 @@ function editVehicle(id) {
   var v=getVehicle(id); if(!v) return;
   document.getElementById('modalVehicleTitle').textContent='Modifier véhicule';
   document.getElementById('vehImmat').value=v.immat;
+  document.getElementById('vehModele').value=v.modele||'';
+  document.getElementById('vehKm').value=v.kilometrage_actuel||'';
+  document.getElementById('vehCT').value=v.date_controle_technique||'';
+  document.getElementById('vehChrono').value=v.date_chronotachygraphe||'';
+  document.getElementById('vehRevision').value=v.date_revision||'';
+  document.getElementById('vehAtelierDebut').value=v.atelier_debut?v.atelier_debut.split('T')[0]:'';
+  document.getElementById('vehAtelierFin').value=v.atelier_fin?v.atelier_fin.split('T')[0]:'';
+  document.getElementById('vehMotif').value=v.motif_blocage||'';
   document.getElementById('editVehicleId').value=id;
   openModal('modalVehicle');
 }
@@ -1516,10 +1625,28 @@ function saveVehicle() {
   var immat=document.getElementById('vehImmat').value.trim().toUpperCase();
   var editId=document.getElementById('editVehicleId').value;
   if(!immat) return showToast('Immatriculation requise');
+
+  var atelierDebut=document.getElementById('vehAtelierDebut').value;
+  var atelierFin=document.getElementById('vehAtelierFin').value;
+  if((atelierDebut&&!atelierFin)||(!atelierDebut&&atelierFin)) return showToast('Renseignez début ET fin atelier');
+  if(atelierDebut&&atelierFin&&atelierFin<atelierDebut) return showToast('Date de fin atelier invalide');
+
+  var data={
+    immat:immat,
+    modele:document.getElementById('vehModele').value.trim()||null,
+    kilometrage_actuel:parseInt(document.getElementById('vehKm').value)||0,
+    date_controle_technique:document.getElementById('vehCT').value||null,
+    date_chronotachygraphe:document.getElementById('vehChrono').value||null,
+    date_revision:document.getElementById('vehRevision').value||null,
+    atelier_debut:atelierDebut?atelierDebut+'T00:00:00':null,
+    atelier_fin:atelierFin?atelierFin+'T23:59:59':null,
+    motif_blocage:document.getElementById('vehMotif').value||null
+  };
+
   showLoader('Enregistrement...');
   var promise;
-  if(editId) promise=sb.from('vehicles').update({immat:immat}).eq('id',editId);
-  else promise=sb.from('vehicles').insert({immat:immat}).select();
+  if(editId) promise=sb.from('vehicles').update(data).eq('id',editId);
+  else promise=sb.from('vehicles').insert(data).select();
   promise.then(function(res){
     if(res.error) throw res.error;
     return loadVehicles();
