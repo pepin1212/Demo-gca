@@ -603,6 +603,20 @@ function getDocFiles(record, key) {
 function esc(s) { if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function getVehicle(id) { for(var i=0;i<APP.vehicles.length;i++) if(APP.vehicles[i].id===id) return APP.vehicles[i]; return null; }
 function getResa(id) { for(var i=0;i<APP.reservations.length;i++) if(APP.reservations[i].id===id) return APP.reservations[i]; return null; }
+
+// Retourne "Prénom NOM" pour un vendeur, en complétant le NOM depuis la liste des vendeurs si besoin
+function getVendeurDisplay(vendeurName) {
+  if(!vendeurName) return vendeurName;
+  for(var i=0;i<APP.vendors.length;i++) {
+    var v=APP.vendors[i];
+    var fullName=((v.prenom||'')+' '+(v.nom||'')).trim();
+    if(fullName===vendeurName || v.prenom===vendeurName) {
+      if(v.prenom && v.nom) return v.prenom+' '+v.nom.toUpperCase();
+      return fullName||vendeurName;
+    }
+  }
+  return vendeurName;
+}
 function getResaStatus(r) { var t=toDateStr(new Date()); if(r.date_end<t) return 'past'; if(r.date_start<=t) return 'active'; return 'upcoming'; }
 
 function showToast(msg) {
@@ -1176,6 +1190,17 @@ function openResaDetail(id) {
   // ===================== BLOC RETOUR =====================
   html+='<div class="divider"></div><div class="section-title" style="font-size:13px;letter-spacing:1px">🏁 RETOUR</div>';
 
+  // Chauffeur / état des lieux retour (pré-rempli avec le chauffeur du départ, modifiable)
+  var chRetourNom=(r.chauffeur_retour_nom!=null)?r.chauffeur_retour_nom:(r.chauffeur_nom||'');
+  var chRetourPrenom=(r.chauffeur_retour_prenom!=null)?r.chauffeur_retour_prenom:(r.chauffeur_prenom||'');
+  var chRetourTel=(r.chauffeur_retour_telephone!=null)?r.chauffeur_retour_telephone:(r.chauffeur_telephone||'');
+  html+='<div class="section-title">Chauffeur (état des lieux retour)</div>';
+  html+='<div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="drvNomRetour_'+id+'" value="'+esc(chRetourNom)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" id="drvPrenomRetour_'+id+'" value="'+esc(chRetourPrenom)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" id="drvTelRetour_'+id+'" value="'+esc(chRetourTel)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
+  html+='</div>';
+
   // Kilométrage — retour
   html+='<div class="section-title">🔢 Kilométrage</div>';
   html+='<div class="form-group"><label class="form-label">Retour (km)</label><input type="number" class="form-input" id="kmRetour_'+id+'" value="'+(r.km_retour!=null?r.km_retour:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
@@ -1596,6 +1621,20 @@ function saveDriverInfo(resaId) {
   }).catch(function(e){showToast('Erreur: '+(e.message||''));console.error(e);});
 }
 
+function saveDriverInfoRetour(resaId) {
+  var data={
+    chauffeur_retour_nom: document.getElementById('drvNomRetour_'+resaId).value.trim(),
+    chauffeur_retour_prenom: document.getElementById('drvPrenomRetour_'+resaId).value.trim(),
+    chauffeur_retour_telephone: document.getElementById('drvTelRetour_'+resaId).value.trim()
+  };
+  sb.from('reservations').update(data).eq('id',resaId).then(function(res){
+    if(res.error) throw res.error;
+    return loadReservations();
+  }).then(function(){
+    showToast('Informations chauffeur (retour) enregistrées');
+  }).catch(function(e){showToast('Erreur: '+(e.message||''));console.error(e);});
+}
+
 function deletePhoto(resaId, type, index) {
   if(!confirm('Supprimer cette photo ?')) return;
   var r=getResa(resaId); if(!r) return;
@@ -1675,7 +1714,7 @@ function downloadAllDemoZip(resaId) {
   // Info fiche texte
   var fiche='RÉSERVATION '+r.id+'\n';
   fiche+='Véhicule: '+(veh?veh.immat:'-')+'\n';
-  fiche+='Vendeur: '+r.vendeur+'\n';
+  fiche+='Vendeur: '+getVendeurDisplay(r.vendeur)+'\n';
   fiche+='Du '+formatDate(r.date_start)+' au '+formatDate(r.date_end)+'\n';
   fiche+='Entreprise cliente: '+(r.entreprise||'-')+'\n';
   fiche+='Chauffeur: '+((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()+'\n';
@@ -1845,8 +1884,13 @@ function genPdfConfirmation(resaId, type, outputMode) {
     var vendeurSigUrl=type==='depart'?r.signature_vendeur_depart:r.signature_vendeur_retour;
     if(!clientSigUrl && !vendeurSigUrl) return Promise.resolve();
 
-    var chauffeurNomComplet=((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()||'—';
-    var vendeurNom=r.vendeur||'—';
+    var chauffeurNomComplet;
+    if(type==='retour' && (r.chauffeur_retour_nom!=null || r.chauffeur_retour_prenom!=null)) {
+      chauffeurNomComplet=((r.chauffeur_retour_prenom||'')+' '+(r.chauffeur_retour_nom||'')).trim()||'—';
+    } else {
+      chauffeurNomComplet=((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()||'—';
+    }
+    var vendeurNom=getVendeurDisplay(r.vendeur)||'—';
 
     return Promise.all([
       clientSigUrl?loadImgAsDataUrl(clientSigUrl):Promise.resolve(null),
@@ -2102,15 +2146,22 @@ function genPdfConfirmation(resaId, type, outputMode) {
 
   // ===== RESPONSABLE & CLIENT =====
   y=sectionBox('RESPONSABLE DAF & CLIENT', y);
-  fieldLine('VENDEUR', r.vendeur, y, 0);
+  fieldLine('VENDEUR', getVendeurDisplay(r.vendeur), y, 0);
   fieldLine('ENTREPRISE CLIENTE', r.entreprise, y, contentW/2);
   y+=11;
 
   // ===== CHAUFFEUR =====
   y=sectionBox('CHAUFFEUR', y);
-  var chauffeurNomComplet=((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()||'—';
+  var chauffeurNomComplet, chauffeurTel;
+  if(type==='retour' && (r.chauffeur_retour_nom!=null || r.chauffeur_retour_prenom!=null || r.chauffeur_retour_telephone!=null)) {
+    chauffeurNomComplet=((r.chauffeur_retour_prenom||'')+' '+(r.chauffeur_retour_nom||'')).trim()||'—';
+    chauffeurTel=r.chauffeur_retour_telephone;
+  } else {
+    chauffeurNomComplet=((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()||'—';
+    chauffeurTel=r.chauffeur_telephone;
+  }
   fieldLine('NOM ET PRÉNOM', chauffeurNomComplet, y, 0);
-  fieldLine('TÉLÉPHONE', r.chauffeur_telephone, y, contentW/2);
+  fieldLine('TÉLÉPHONE', chauffeurTel, y, contentW/2);
   y+=11;
 
   // Cases à cocher vérifications (réutilisées plus bas pour DOCUMENTS REMIS)
