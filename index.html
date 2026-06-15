@@ -1809,7 +1809,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
   // Finalise le document : ajoute les annexes véhicule (départ), puis télécharge (mode 'save') ou retourne {blob, filename} (mode 'blob')
   function finishPdf(filename) {
     var basePromise;
-    if(type==='depart') basePromise=mergeVehicleDocAnnexes(doc, veh, r);
+    if(type==='depart'||type==='retour') basePromise=mergeVehicleDocAnnexes(doc, veh, r, type);
     else basePromise=Promise.resolve(doc.output('arraybuffer'));
 
     return basePromise.then(function(finalBytes){
@@ -2307,19 +2307,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
       }
       flushRow();
 
-      // Rapport conso si retour
-      if(type==='retour') {
-        var docKey='doc_'+slugify('Rapport Conso');
-        if(getDocFiles(r, docKey).length>0) {
-          doc.addPage();
-          y=margin;
-          y=sectionBox('RAPPORT DE CONSOMMATION', y);
-          doc.setFontSize(9);
-          doc.setFont(undefined,'normal');
-          doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
-          doc.text('Document disponible en téléchargement séparé dans l\'application.', margin, y);
-        }
-      }
+      // Rapport conso : inséré automatiquement en annexe en fin de document (voir mergeVehicleDocAnnexes)
 
       // Signalement des dégâts visibles constatés (retour uniquement)
       if(type==='retour') {
@@ -2467,33 +2455,40 @@ function genPdfConfirmation(resaId, type, outputMode) {
 // Fusionne le PDF principal (jsPDF) avec les documents véhicule (carte grise, certificat homologation, agrément ADR)
 // et les documents réservation (contrat de prêt, mémo assurance, permis chauffeur), en pages annexes, via pdf-lib.
 // Retourne une Promise<Uint8Array> (bytes du PDF final).
-function mergeVehicleDocAnnexes(mainDoc, veh, r) {
+function mergeVehicleDocAnnexes(mainDoc, veh, r, annexType) {
   var mainBytes=mainDoc.output('arraybuffer');
   var PDFLib=window.PDFLib;
   if(!PDFLib) return Promise.resolve(mainBytes);
 
   var toFetch=[];
-  if(veh) {
-    var vehAnnexDocs=[
-      {label:'Carte Grise', source:veh, key:'doc_carte_grise'},
-      {label:'Certificat Homologation', source:veh, key:'doc_certificat_homologation'},
-      {label:'Agrément ADR', source:veh, key:'doc_agr_ment_adr'}
-    ];
-    vehAnnexDocs.forEach(function(a){
-      var files=getDocFiles(a.source, a.key);
-      files.forEach(function(f){ toFetch.push({label:a.label, url:f.url, name:f.name}); });
-    });
-  }
-  if(r) {
-    var resaAnnexDocs=[
-      {label:'Contrat de Prêt', source:r, key:'doc_contrat_de_pr_t'},
-      {label:'Mémo Assurance', source:r, key:'doc_assurance'},
-      {label:'Permis de Conduire', source:r, key:'doc_permis_chauffeur'}
-    ];
-    resaAnnexDocs.forEach(function(a){
-      var files=getDocFiles(a.source, a.key);
-      files.forEach(function(f){ toFetch.push({label:a.label, url:f.url, name:f.name}); });
-    });
+  if(annexType==='depart') {
+    if(veh) {
+      var vehAnnexDocs=[
+        {label:'Carte Grise', source:veh, key:'doc_carte_grise'},
+        {label:'Certificat Homologation', source:veh, key:'doc_certificat_homologation'},
+        {label:'Agrément ADR', source:veh, key:'doc_agr_ment_adr'}
+      ];
+      vehAnnexDocs.forEach(function(a){
+        var files=getDocFiles(a.source, a.key);
+        files.forEach(function(f){ toFetch.push({label:a.label, url:f.url, name:f.name}); });
+      });
+    }
+    if(r) {
+      var resaAnnexDocs=[
+        {label:'Contrat de Prêt', source:r, key:'doc_contrat_de_pr_t'},
+        {label:'Mémo Assurance', source:r, key:'doc_assurance'},
+        {label:'Permis de Conduire', source:r, key:'doc_permis_chauffeur'}
+      ];
+      resaAnnexDocs.forEach(function(a){
+        var files=getDocFiles(a.source, a.key);
+        files.forEach(function(f){ toFetch.push({label:a.label, url:f.url, name:f.name}); });
+      });
+    }
+  } else if(annexType==='retour') {
+    if(r) {
+      var files=getDocFiles(r, 'doc_'+slugify('Rapport Conso'));
+      files.forEach(function(f){ toFetch.push({label:'Rapport de Consommation', url:f.url, name:f.name}); });
+    }
   }
 
   if(toFetch.length===0) return Promise.resolve(mainBytes);
