@@ -158,6 +158,12 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--gray); }
 .modal-body { padding: 16px; }
 .section-title { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid var(--orange); }
+.phase-title { font-size: 20px; font-weight: 800; letter-spacing: 1.5px; margin: 4px 0 12px; padding-bottom: 8px; border-bottom: none; }
+.phase-block { border-radius: var(--radius); padding: 14px 12px; margin-bottom: 4px; }
+.phase-block-depart { background: rgba(59,130,246,0.07); }
+.phase-block-retour { background: rgba(239,68,68,0.06); }
+.phase-title-depart { color: #1D4ED8; }
+.phase-title-retour { color: #B91C1C; }
 .divider { height: 1px; background: #CBD5E1; margin: 16px 0; }
 .info-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--gray-light); font-size: 13px; }
 .vehicle-indicators { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
@@ -1135,7 +1141,9 @@ function openResaDetail(id) {
   }
 
   // ===================== BLOC DÉPART =====================
-  html+='<div class="divider"></div><div class="section-title" style="font-size:13px;letter-spacing:1px">🚗 DÉPART</div>';
+  html+='<div class="divider"></div>';
+  html+='<div class="phase-block phase-block-depart">';
+  html+='<div class="phase-title phase-title-depart">🚗 DÉPART</div>';
 
   // Chauffeur / état des lieux départ
   html+='<div class="section-title">Chauffeur (état des lieux départ)</div>';
@@ -1188,7 +1196,11 @@ function openResaDetail(id) {
   html+='</div>';
 
   // ===================== BLOC RETOUR =====================
-  html+='<div class="divider"></div><div class="section-title" style="font-size:13px;letter-spacing:1px">🏁 RETOUR</div>';
+  html+='</div>'; // fin phase-block-depart
+
+  html+='<div class="divider"></div>';
+  html+='<div class="phase-block phase-block-retour">';
+  html+='<div class="phase-title phase-title-retour">🏁 RETOUR</div>';
 
   // Chauffeur / état des lieux retour (pré-rempli avec le chauffeur du départ, modifiable)
   var chRetourNom=(r.chauffeur_retour_nom!=null)?r.chauffeur_retour_nom:(r.chauffeur_nom||'');
@@ -1262,6 +1274,8 @@ function openResaDetail(id) {
   html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'client\')">'+(r.signature_retour?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
   html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'vendeur\')">'+(r.signature_vendeur_retour?'✍️ Re-signer (vendeur)':'✍️ Signer (vendeur)')+'</button>';
   html+='</div>';
+
+  html+='</div>'; // fin phase-block-retour
 
   // Actions
   html+='<div class="divider"></div>';
@@ -1946,7 +1960,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
 
   if(heroImgData) {
     var heroH=58;
-    var panelMinW=58; // largeur minimale du panneau titre/note (mm)
+    var panelMinW=62; // largeur minimale du panneau titre/note (mm)
 
     var props;
     try { props=doc.getImageProperties(heroImgData); } catch(e){ props={width:4,height:3}; }
@@ -1957,76 +1971,99 @@ function genPdfConfirmation(resaId, type, outputMode) {
     if(imgW>maxImgW) imgW=maxImgW;
     var panelW=contentW-imgW;
     var panelX=margin+imgW;
+    var rr=3;
+    var COL_NAVY=[13,30,64];
 
-    // Photo entière (contain), coins arrondis à gauche
+    // Cadre global arrondi englobant photo + panneau (clip commun pour coins homogènes)
     try {
       doc.saveGraphicsState();
-      roundedClip(doc, margin, y, imgW, heroH, 3);
+      roundedClip(doc, margin, y, contentW, heroH, rr);
+
+      // Photo (contain dans sa zone, fond neutre si letterbox)
       doc.setFillColor(245,247,250);
       doc.rect(margin, y, imgW, heroH, 'F');
       doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH);
+
+      // Panneau navy uni
+      doc.setFillColor(COL_NAVY[0],COL_NAVY[1],COL_NAVY[2]);
+      doc.rect(panelX, y, panelW, heroH, 'F');
+
+      // Liseré orange vertical à la jonction photo/panneau
+      doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
+      doc.rect(panelX, y, 0.9, heroH, 'F');
+
       doc.restoreGraphicsState();
+
+      // Contour fin sur l'ensemble
+      doc.setDrawColor(220,224,230);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(margin, y, contentW, heroH, rr, rr);
     } catch(e){
-      try { doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH); } catch(e2){}
+      try {
+        doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH);
+        doc.setFillColor(COL_NAVY[0],COL_NAVY[1],COL_NAVY[2]);
+        doc.rect(panelX, y, panelW, heroH, 'F');
+      } catch(e2){}
     }
 
-    // Panneau bleu (dégradé bleu -> bleu plus clair) avec titre et note
-    var steps=24;
-    for(var g=0;g<steps;g++) {
-      var t=g/(steps-1);
-      var col=[
-        Math.round(COL_BLUE[0]+(38-COL_BLUE[0])*t),
-        Math.round(COL_BLUE[1]+(74-COL_BLUE[1])*t),
-        Math.round(COL_BLUE[2]+(135-COL_BLUE[2])*t)
-      ];
-      doc.setFillColor(col[0],col[1],col[2]);
-      var segW=panelW/steps;
-      doc.rect(panelX+g*segW, y, segW+0.3, heroH, 'F');
-    }
+    // ===== Texte du panneau =====
+    var padX=panelX+6;
+    var maxTextW=panelW-10;
 
-    // Liseré orange à la base du panneau
-    doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
-    doc.rect(panelX, y+heroH-1.2, panelW, 1.2, 'F');
+    // Petit label au-dessus du titre (capitales, espacées)
+    doc.setFont(undefined,'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(255,255,255);
+    try { doc.setGState(new window.jspdf.GState({opacity:0.55})); } catch(e){}
+    var labelTxt='VÉHICULE DE DÉMONSTRATION';
+    // Espacement manuel des lettres pour un effet "letter-spacing"
+    var spacedLabel=labelTxt.split('').join(String.fromCharCode(8202));
+    var labelLines=doc.splitTextToSize(spacedLabel, maxTextW);
+    var textY=y+9;
+    doc.text(labelLines[0], padX, textY);
+    try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
 
-    // Coins arrondis à droite : masque les angles extérieurs du panneau
-    doc.setFillColor(255,255,255);
-    var rr=3;
-    doc.rect(margin+contentW-rr, y, rr, rr, 'F');
-    doc.rect(margin+contentW-rr, y+heroH-rr, rr, rr, 'F');
-    doc.setFillColor(col[0],col[1],col[2]);
-    doc.roundedRect(margin+contentW-2*rr, y, 2*rr, heroH, rr, rr, 'F');
-    doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
-    doc.rect(panelX, y+heroH-1.2, panelW-rr, 1.2, 'F');
-
-    // Texte du panneau
-    var padX=panelX+5;
-    var maxTextW=panelW-8;
+    // Modèle en grand
+    textY+=7.5;
     doc.setFont(undefined,'bold');
     doc.setTextColor(255,255,255);
     var modeleText=veh&&veh.modele?veh.modele:immat;
-    var titleSize=panelW<70?13:15;
+    var titleSize=panelW<76?14:16;
     doc.setFontSize(titleSize);
     var titleLines=doc.splitTextToSize(modeleText, maxTextW);
-    var textY=y+10;
+    var maxTitleLines=2;
+    if(titleLines.length>maxTitleLines) titleLines=titleLines.slice(0,maxTitleLines);
     doc.text(titleLines, padX, textY);
-    textY+=titleLines.length*(titleSize*0.42)+2;
+    textY+=titleLines.length*(titleSize*0.42)+1;
 
-    doc.setFont(undefined,'normal');
-    doc.setFontSize(8);
-    try { doc.setGState(new window.jspdf.GState({opacity:0.85})); } catch(e){}
-    doc.text('Véhicule de démonstration', padX, textY);
-    doc.text(immat, padX, textY+4);
+    // Séparateur fin
+    textY+=2.5;
+    doc.setDrawColor(255,255,255);
+    try { doc.setGState(new window.jspdf.GState({opacity:0.25})); } catch(e){}
+    doc.setLineWidth(0.3);
+    doc.line(padX, textY, padX+Math.min(maxTextW,28), textY);
     try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
-    textY+=10;
 
+    // Immatriculation
+    textY+=5;
+    doc.setFont(undefined,'normal');
+    doc.setFontSize(9);
+    try { doc.setGState(new window.jspdf.GState({opacity:0.9})); } catch(e){}
+    doc.text(immat, padX, textY);
+    try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
+    textY+=6;
+
+    // Note commerciale
     if(veh && veh.note_commerciale) {
       doc.setFont(undefined,'normal');
       doc.setFontSize(8);
-      var availH=heroH-(textY-y)-3;
-      var maxLines=Math.max(1,Math.floor(availH/3.6));
+      try { doc.setGState(new window.jspdf.GState({opacity:0.8})); } catch(e){}
+      var availH=heroH-(textY-y)-4;
+      var maxLines=Math.max(1,Math.floor(availH/3.8));
       var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, maxTextW);
       if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
       doc.text(heroNoteLines, padX, textY);
+      try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
     }
 
     y+=heroH+8;
