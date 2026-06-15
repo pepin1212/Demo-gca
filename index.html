@@ -100,6 +100,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 /* FORM */
 .form-group { margin-bottom: 12px; }
+.form-section { background: var(--light); border-radius: var(--radius); padding: 12px; margin-bottom: 14px; }
+.form-section .section-title { border-bottom: none; padding-bottom: 0; }
+.form-section .form-group:last-child { margin-bottom: 0; }
 .form-label { font-size: 11px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; display: block; }
 .form-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--gray-light); border-radius: var(--radius-sm); font-size: 14px; background: white; color: var(--dark); outline: none; transition: border-color 0.2s; }
 .form-input:focus { border-color: var(--blue); }
@@ -148,12 +151,12 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .modal { background: white; width: 100%; max-width: 600px; border-radius: 20px 20px 0 0; max-height: 93vh; overflow-y: auto; padding-bottom: calc(20px + var(--safe-bottom)); animation: slideUp 0.3s ease; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .modal-handle { width: 36px; height: 4px; background: var(--gray-light); border-radius: 2px; margin: 10px auto 0; }
-.modal-header { padding: 14px 18px; border-bottom: 1px solid var(--gray-light); display: flex; align-items: center; justify-content: space-between; }
+.modal-header { padding: 14px 18px; border-bottom: 1px solid var(--gray-light); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: white; z-index: 5; }
 .modal-title { font-size: 16px; font-weight: 700; }
 .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--gray); }
 .modal-body { padding: 16px; }
-.section-title { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 2px solid var(--gray-light); }
-.divider { height: 1px; background: var(--gray-light); margin: 14px 0; }
+.section-title { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid var(--orange); }
+.divider { height: 1px; background: #CBD5E1; margin: 16px 0; }
 .info-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--gray-light); font-size: 13px; }
 .info-label { color: var(--gray); font-size: 12px; }
 .info-value { font-weight: 600; }
@@ -361,18 +364,25 @@ input[type="file"] { display: none; }
       <button class="modal-close" onclick="closeModal('modalNewResa')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="section-title">Véhicule</div>
-      <div class="vehicle-selector" id="vehSelectorModal"></div>
-      <div class="conflict-warn" id="conflictWarn">⚠️ Conflit avec une réservation existante</div>
-      <div class="section-title">Période</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <div><label class="form-label">Début</label><input type="date" class="form-input" id="resaStart" onchange="checkConflict()"></div>
-        <div><label class="form-label">Fin</label><input type="date" class="form-input" id="resaEnd" onchange="checkConflict()"></div>
+      <div class="form-section">
+        <div class="section-title">Véhicule</div>
+        <div class="vehicle-selector" id="vehSelectorModal"></div>
+        <div class="conflict-warn" id="conflictWarn">⚠️ Conflit avec une réservation existante</div>
       </div>
-      <div class="section-title">Vendeur & Client</div>
-      <div class="form-group"><label class="form-label">Vendeur</label><input type="text" class="form-input" id="resaVendeur"></div>
-      <div class="form-group"><label class="form-label">Entreprise cliente</label><input type="text" class="form-input" id="resaEntreprise" placeholder="Nom de l'entreprise"></div>
-      <div class="form-group"><label class="form-label">Note</label><textarea class="form-input" id="resaNote" placeholder="Informations..."></textarea></div>
+      <div class="form-section">
+        <div class="section-title">Période</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label class="form-label">Début</label><input type="date" class="form-input" id="resaStart" onchange="checkConflict()"></div>
+          <div><label class="form-label">Fin</label><input type="date" class="form-input" id="resaEnd" onchange="checkConflict()"></div>
+        </div>
+      </div>
+      <div class="form-section">
+        <div class="section-title">Vendeur & Client</div>
+        <div class="form-group" id="resaVendeurStaticWrap"><label class="form-label">Vendeur</label><div class="form-input" id="resaVendeurStatic" style="background:var(--gray-light);color:var(--dark);display:flex;align-items:center"></div></div>
+        <div class="form-group" id="resaVendeurSelectWrap"><label class="form-label">Vendeur</label><select class="form-input" id="resaVendeur"></select></div>
+        <div class="form-group"><label class="form-label">Entreprise cliente</label><input type="text" class="form-input" id="resaEntreprise" placeholder="Nom de l'entreprise"></div>
+        <div class="form-group"><label class="form-label">Note</label><textarea class="form-input" id="resaNote" placeholder="Informations..."></textarea></div>
+      </div>
       <input type="hidden" id="editResaId">
       <button class="btn btn-primary btn-full" onclick="saveResa()">Enregistrer</button>
     </div>
@@ -599,6 +609,37 @@ function loadVendorsForLogin() {
     console.error('loadVendorsForLogin error:',e);
     populateLoginDropdown();
   });
+}
+
+function populateResaVendeurSelect(selectedValue) {
+  var sel=document.getElementById('resaVendeur');
+  var html='';
+  var found=false;
+  for(var i=0;i<APP.vendors.length;i++) {
+    var v=APP.vendors[i];
+    var fullName=((v.prenom||'')+' '+(v.nom||'')).trim();
+    if(fullName===selectedValue) found=true;
+    html+='<option value="'+esc(fullName)+'">'+esc(fullName)+'</option>';
+  }
+  // Si la valeur sélectionnée (ancien vendeur texte libre ou admin) n'est pas dans la liste, l'ajouter pour ne pas la perdre
+  if(selectedValue && !found) {
+    html='<option value="'+esc(selectedValue)+'">'+esc(selectedValue)+'</option>'+html;
+  }
+  if(!selectedValue) html='<option value="">— Sélectionnez —</option>'+html;
+  sel.innerHTML=html;
+  sel.value=selectedValue||'';
+
+  // Non-admin : champ vendeur figé (lecture seule) ; admin : liste déroulante modifiable
+  var staticWrap=document.getElementById('resaVendeurStaticWrap');
+  var selectWrap=document.getElementById('resaVendeurSelectWrap');
+  if(APP.isAdmin) {
+    staticWrap.style.display='none';
+    selectWrap.style.display='';
+  } else {
+    staticWrap.style.display='';
+    selectWrap.style.display='none';
+    document.getElementById('resaVendeurStatic').textContent=selectedValue||'—';
+  }
 }
 
 function populateLoginDropdown() {
@@ -891,7 +932,7 @@ function openNewResa() {
   document.getElementById('editResaId').value='';
   document.getElementById('resaStart').value='';
   document.getElementById('resaEnd').value='';
-  document.getElementById('resaVendeur').value=(APP.isAdmin?'':APP.user)||'';
+  populateResaVendeurSelect((APP.isAdmin?'':APP.user)||'');
   document.getElementById('resaEntreprise').value='';
   document.getElementById('resaNote').value='';
   document.getElementById('conflictWarn').style.display='none';
@@ -1014,8 +1055,16 @@ function openResaDetail(id) {
     var docKey='doc_'+slugify(RESA_DOCS[k]);
     var hasDoc=!!r[docKey];
     var docName=r[docKey+'_name']||RESA_DOCS[k];
-    html+='<div class="doc-row">';
-    html+='<div class="doc-row-left"><span style="font-size:15px">'+(hasDoc?'✅':'⬜')+'</span>'+RESA_DOCS[k]+'</div>';
+    var isPermis=(RESA_DOCS[k]==='Permis Chauffeur');
+    var isAssurance=(RESA_DOCS[k]==='Assurance');
+    var checkKey=isPermis?'permis_verifie':(isAssurance?'assurance_verifiee':null);
+    var checkConfirmed=checkKey?!!r[checkKey]:false;
+    var confirmed=hasDoc||checkConfirmed;
+    var displayLabel=isPermis?'Permis de conduire (chauffeur)':(isAssurance?'Mémo assurance':RESA_DOCS[k]);
+
+    html+='<div class="doc-row" style="flex-direction:column;align-items:stretch;gap:6px">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;width:100%">';
+    html+='<div class="doc-row-left"><span style="font-size:15px">'+(confirmed?'✅':'⬜')+'</span>'+displayLabel+'</div>';
     html+='<div class="doc-row-actions">';
     if(hasDoc) {
       html+='<button class="btn btn-light btn-xs" onclick="downloadResaDoc(\''+id+'\',\''+docKey+'\')">↓</button>';
@@ -1025,6 +1074,12 @@ function openResaDetail(id) {
       html+='<input type="file" id="upDoc_'+docKey+'_'+id+'" accept=".pdf,.doc,.docx,image/*" onchange="uploadResaDoc(\''+id+'\',\''+docKey+'\',this)">';
     }
     html+='</div></div>';
+    if(checkKey) {
+      html+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray);cursor:pointer;padding-left:2px">';
+      html+='<input type="checkbox" id="'+(isPermis?'permisCheck_':'assuranceCheck_')+id+'" '+(checkConfirmed?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:16px;height:16px">';
+      html+='Je confirme être en possession de ce document (sans le téléverser)</label>';
+    }
+    html+='</div>';
   }
 
   // Photos départ
@@ -1035,12 +1090,6 @@ function openResaDetail(id) {
   html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" id="drvPrenom_'+id+'" value="'+esc(r.chauffeur_prenom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
   html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" id="drvTel_'+id+'" value="'+esc(r.chauffeur_telephone||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
   html+='</div>';
-  html+='<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer">';
-  html+='<input type="checkbox" id="permisCheck_'+id+'" '+(r.permis_verifie?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:18px;height:18px">';
-  html+='Permis de conduire vérifié</label>';
-  html+='<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;margin-bottom:8px;cursor:pointer">';
-  html+='<input type="checkbox" id="assuranceCheck_'+id+'" '+(r.assurance_verifiee?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:18px;height:18px">';
-  html+='Assurance vérifiée</label>';
 
   // Kilométrage
   html+='<div class="divider"></div><div class="section-title">🔢 Kilométrage</div>';
@@ -1147,7 +1196,7 @@ function editResa(id) {
   APP.selectedVehicleId=r.vehicle_id;
   document.getElementById('resaStart').value=r.date_start;
   document.getElementById('resaEnd').value=r.date_end;
-  document.getElementById('resaVendeur').value=r.vendeur;
+  populateResaVendeurSelect(r.vendeur);
   document.getElementById('resaEntreprise').value=r.entreprise||'';
   document.getElementById('resaNote').value=r.note||'';
   document.getElementById('conflictWarn').style.display='none';
@@ -2445,9 +2494,9 @@ function renderVehicleList() {
     }
 
     html+='<div class="card">'+
-      (v.photo_url?'<img src="'+v.photo_url+'" alt="" style="width:100%;height:120px;object-fit:cover;display:block">':'')+
       '<div class="card-header">'+
-      '<div><div class="card-title">'+esc(v.immat)+'</div><div class="card-sub">'+(v.modele?esc(v.modele)+' · ':'')+resaCount+' réservation(s)</div></div>'+
+      '<img src="'+(v.photo_url||LOGO_B64)+'" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:'+(v.photo_url?'cover':'contain')+';background:white;border:1px solid var(--gray-light);flex-shrink:0;margin-right:10px">'+
+      '<div style="flex:1"><div class="card-title">'+esc(v.immat)+'</div><div class="card-sub">'+(v.modele?esc(v.modele)+' · ':'')+resaCount+' réservation(s)</div></div>'+
       '<div style="display:flex;gap:6px">'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleHistory(\''+v.id+'\')">🕒 Historique</button>'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleDocs(\''+v.id+'\')">📄 Docs</button>'+
