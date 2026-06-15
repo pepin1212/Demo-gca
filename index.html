@@ -30,6 +30,7 @@
   --safe-top: env(safe-area-inset-top, 0px);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { overflow-x: hidden; max-width: 100%; overscroll-behavior-x: none; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--light); color: var(--dark); min-height: 100vh; padding-bottom: calc(70px + var(--safe-bottom)); }
 
 /* LOGIN */
@@ -73,7 +74,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .nav-btn.active .nav-dot { opacity: 1; }
 
 /* PAGES */
-.page { display: none; padding: 14px; }
+.page { display: none; padding: 14px; max-width: 100%; overflow-x: hidden; }
 .page.active { display: block; }
 .page-title { font-size: 18px; font-weight: 800; color: var(--blue); }
 .page-header-sticky { position: sticky; top: var(--header-h, 0px); z-index: 50; background: var(--light); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 10px 0; }
@@ -2420,31 +2421,63 @@ function mergeVehicleDocAnnexes(mainDoc, veh, r) {
   });
 }
 
-// Ajoute un document (PDF ou image) comme page(s) annexe(s) dans finalPdf, en pleine page sans page de titre
+// Ajoute un document (PDF ou image) comme page(s) annexe(s) dans finalPdf, avec un petit titre en en-tête
 function appendAnnexToPdf(finalPdf, bytes, label, filename) {
   var PDFLib=window.PDFLib;
   var ext=(filename.split('.').pop()||'').toLowerCase();
   var isPdf=ext==='pdf'||looksLikePdf(bytes);
+  var margin=14; // ~5mm, marge minimale sûre pour l'impression
+  var titleH=16; // hauteur réservée au titre (pt)
+
+  function drawTitle(page, pageW, pageH, font) {
+    page.drawText(label, {
+      x: margin,
+      y: pageH - margin - 9,
+      size: 10,
+      font: font,
+      color: PDFLib.rgb(0,48/255,135/255)
+    });
+    // Liseré orange sous le titre
+    page.drawRectangle({
+      x: margin, y: pageH - margin - 12.5,
+      width: pageW - 2*margin, height: 1,
+      color: PDFLib.rgb(232/255,96/255,28/255)
+    });
+  }
 
   if(isPdf) {
     return PDFLib.PDFDocument.load(bytes).then(function(srcPdf){
       return finalPdf.copyPages(srcPdf, srcPdf.getPageIndices());
     }).then(function(copiedPages){
-      copiedPages.forEach(function(p){ finalPdf.addPage(p); });
+      return finalPdf.embedFont(PDFLib.StandardFonts.HelveticaBold).then(function(font){
+        copiedPages.forEach(function(p){
+          finalPdf.addPage(p);
+          var size=p.getSize();
+          // Élargit légèrement la page en haut pour loger le titre sans réduire le contenu existant
+          var newH=size.height+titleH+margin;
+          p.setSize(size.width, newH);
+          p.translateContent(0, titleH+margin);
+          drawTitle(p, size.width, newH, font);
+        });
+      });
     }).catch(function(e){
       console.error('Erreur insertion PDF annexe '+label+':', e);
     });
   } else {
-    // Image (jpg/png) : page pleine, marges minimales pour impression
+    // Image (jpg/png) : titre en en-tête, image pleine largeur sous le titre, ratio préservé (pas de déformation)
     var embedPromise=ext==='png'?finalPdf.embedPng(bytes):finalPdf.embedJpg(bytes);
-    return embedPromise.then(function(img){
+    return Promise.all([embedPromise, finalPdf.embedFont(PDFLib.StandardFonts.HelveticaBold)]).then(function(results){
+      var img=results[0], font=results[1];
       var pageW=595.28, pageH=841.89;
-      var margin=8;
       var page=finalPdf.addPage([pageW, pageH]);
-      var maxW=pageW-2*margin, maxH=pageH-2*margin;
+      drawTitle(page, pageW, pageH, font);
+
+      var areaTop=pageH-margin-titleH-margin;
+      var areaH=areaTop-margin;
+      var maxW=pageW-2*margin, maxH=areaH;
       var ratio=Math.min(maxW/img.width, maxH/img.height);
       var w=img.width*ratio, h=img.height*ratio;
-      page.drawImage(img, {x:(pageW-w)/2, y:(pageH-h)/2, width:w, height:h});
+      page.drawImage(img, {x:(pageW-w)/2, y:margin+(areaH-h)/2, width:w, height:h});
     }).catch(function(e){
       console.error('Erreur insertion image annexe '+label+':', e);
     });
@@ -2966,9 +2999,10 @@ function saveVendor() {
   var pin=document.getElementById('vendorPin').value.trim();
   var editId=document.getElementById('editVendorId').value;
   if(!prenom) return showToast('Prénom requis');
+  if(!nom) return showToast('Nom requis');
   if(!pin||pin.length<4) return showToast('Code PIN requis (4 à 6 chiffres)');
 
-  var data={prenom:prenom, nom:nom||null, pin:pin};
+  var data={prenom:prenom, nom:nom, pin:pin};
   showLoader('Enregistrement...');
   var promise;
   if(editId) promise=sb.from('vendors').update(data).eq('id',editId);
