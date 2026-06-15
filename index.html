@@ -30,8 +30,9 @@
   --safe-top: env(safe-area-inset-top, 0px);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html, body { overflow-x: hidden; max-width: 100%; overscroll-behavior-x: none; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--light); color: var(--dark); min-height: 100vh; padding-bottom: calc(70px + var(--safe-bottom)); }
+html { overflow-x: hidden; width: 100%; }
+html, body { max-width: 100vw; overscroll-behavior-x: none; touch-action: pan-y; }
+body { overflow-x: hidden; width: 100%; position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--light); color: var(--dark); min-height: 100vh; padding-bottom: calc(70px + var(--safe-bottom)); }
 
 /* LOGIN */
 .login-screen { position: fixed; inset: 0; background: var(--blue); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 500; padding: 40px 24px; }
@@ -1119,43 +1120,33 @@ function openResaDetail(id) {
     html+='</div>';
   }
 
-  // Photos départ
+  // ===================== BLOC DÉPART =====================
+  html+='<div class="divider"></div><div class="section-title" style="font-size:13px;letter-spacing:1px">🚗 DÉPART</div>';
+
   // Chauffeur / état des lieux départ
-  html+='<div class="divider"></div><div class="section-title">Chauffeur (état des lieux départ)</div>';
+  html+='<div class="section-title">Chauffeur (état des lieux départ)</div>';
   html+='<div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="drvNom_'+id+'" value="'+esc(r.chauffeur_nom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
   html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" id="drvPrenom_'+id+'" value="'+esc(r.chauffeur_prenom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
   html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" id="drvTel_'+id+'" value="'+esc(r.chauffeur_telephone||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
   html+='</div>';
 
-  // Kilométrage
+  // Kilométrage — départ
   html+='<div class="divider"></div><div class="section-title">🔢 Kilométrage</div>';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  html+='<div><label class="form-label">Départ (km)</label><input type="number" class="form-input" id="kmDepart_'+id+'" value="'+(r.km_depart!=null?r.km_depart:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
-  html+='<div><label class="form-label">Retour (km)</label><input type="number" class="form-input" id="kmRetour_'+id+'" value="'+(r.km_retour!=null?r.km_retour:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
-  html+='</div>';
-  if(r.km_depart!=null && r.km_retour!=null && r.km_retour>=r.km_depart) {
-    html+='<div class="info-row"><span class="info-label">Distance parcourue</span><span class="info-value">'+(r.km_retour-r.km_depart).toLocaleString('fr-FR')+' km</span></div>';
-  }
+  html+='<div class="form-group"><label class="form-label">Départ (km)</label><input type="number" class="form-input" id="kmDepart_'+id+'" value="'+(r.km_depart!=null?r.km_depart:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
 
-  // Horaires
+  // Horaires — départ
   html+='<div class="divider"></div><div class="section-title">🕒 Horaires</div>';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  html+='<div><label class="form-label">Heure de départ</label><input type="time" class="form-input" id="heureDepart_'+id+'" value="'+(r.heure_depart||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
-  html+='<div><label class="form-label">Heure de retour</label><input type="time" class="form-input" id="heureRetour_'+id+'" value="'+(r.heure_retour||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
-  html+='</div>';
+  html+='<div class="form-group"><label class="form-label">Heure de départ</label><input type="time" class="form-input" id="heureDepart_'+id+'" value="'+(r.heure_depart||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
 
-  // Niveaux Carburant & AdBlue
+  // Niveaux Carburant & AdBlue — départ
   html+='<div class="divider"></div><div class="section-title">⛽ Carburant & AdBlue</div>';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">';
-  html+=gaugeFieldHtml(id, 'carburant_depart', '⛽ Carburant — Départ (%)', r.carburant_depart, '#F59E0B');
-  html+=gaugeFieldHtml(id, 'carburant_retour', '⛽ Carburant — Retour (%)', r.carburant_retour, '#F59E0B');
-  html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  html+=gaugeFieldHtml(id, 'carburant_depart', '⛽ Carburant — Départ (%)', r.carburant_depart, '#F59E0B');
   html+=gaugeFieldHtml(id, 'adblue_depart', '💧 AdBlue — Départ (%)', r.adblue_depart, '#3B82F6');
-  html+=gaugeFieldHtml(id, 'adblue_retour', '💧 AdBlue — Retour (%)', r.adblue_retour, '#3B82F6');
   html+='</div>';
 
+  // Photos départ
   html+='<div class="divider"></div><div class="section-title">Photos Départ</div>';
   html+='<div class="photo-grid" id="pdGrid_'+id+'">';
   var pd=r.photos_depart||[];
@@ -1165,6 +1156,42 @@ function openResaDetail(id) {
   }
   html+='<label class="photo-add" for="upPhotoD_'+id+'">+</label>';
   html+='<input type="file" id="upPhotoD_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'depart\',this)">';
+  html+='</div>';
+
+  // Signatures — Départ
+  html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Départ</div>';
+  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" id="sigLieuDepart_'+id+'" value="'+esc(r.signature_lieu_depart||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'depart\')"></div>';
+  if(r.signature_date_depart) {
+    html+='<div class="info-row"><span class="info-label">Date / heure de signature</span><span class="info-value">'+formatDateTime(r.signature_date_depart)+'</span></div>';
+  }
+  html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
+  html+='<span class="doc-chip '+(r.signature_depart?'ok':'missing')+'">'+(r.signature_depart?'✅':'⬜')+' Client</span>';
+  html+='<span class="doc-chip '+(r.signature_vendeur_depart?'ok':'missing')+'">'+(r.signature_vendeur_depart?'✅':'⬜')+' Vendeur</span>';
+  html+='</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'client\')">'+(r.signature_depart?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (vendeur)':'✍️ Signer (vendeur)')+'</button>';
+  html+='</div>';
+
+  // ===================== BLOC RETOUR =====================
+  html+='<div class="divider"></div><div class="section-title" style="font-size:13px;letter-spacing:1px">🏁 RETOUR</div>';
+
+  // Kilométrage — retour
+  html+='<div class="section-title">🔢 Kilométrage</div>';
+  html+='<div class="form-group"><label class="form-label">Retour (km)</label><input type="number" class="form-input" id="kmRetour_'+id+'" value="'+(r.km_retour!=null?r.km_retour:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
+  if(r.km_depart!=null && r.km_retour!=null && r.km_retour>=r.km_depart) {
+    html+='<div class="info-row"><span class="info-label">Distance parcourue</span><span class="info-value">'+(r.km_retour-r.km_depart).toLocaleString('fr-FR')+' km</span></div>';
+  }
+
+  // Horaires — retour
+  html+='<div class="divider"></div><div class="section-title">🕒 Horaires</div>';
+  html+='<div class="form-group"><label class="form-label">Heure de retour</label><input type="time" class="form-input" id="heureRetour_'+id+'" value="'+(r.heure_retour||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
+
+  // Niveaux Carburant & AdBlue — retour
+  html+='<div class="divider"></div><div class="section-title">⛽ Carburant & AdBlue</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  html+=gaugeFieldHtml(id, 'carburant_retour', '⛽ Carburant — Retour (%)', r.carburant_retour, '#F59E0B');
+  html+=gaugeFieldHtml(id, 'adblue_retour', '💧 AdBlue — Retour (%)', r.adblue_retour, '#3B82F6');
   html+='</div>';
 
   // Photos retour
@@ -1195,21 +1222,6 @@ function openResaDetail(id) {
   html+='</div>';
   html+='<label class="btn btn-full" for="upPhotoDg_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter une photo de dégât constaté</label>';
   html+='<input type="file" id="upPhotoDg_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'degradation\',this)" style="display:none">';
-
-  // Signatures — Départ
-  html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Départ</div>';
-  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" id="sigLieuDepart_'+id+'" value="'+esc(r.signature_lieu_depart||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'depart\')"></div>';
-  if(r.signature_date_depart) {
-    html+='<div class="info-row"><span class="info-label">Date / heure de signature</span><span class="info-value">'+formatDateTime(r.signature_date_depart)+'</span></div>';
-  }
-  html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
-  html+='<span class="doc-chip '+(r.signature_depart?'ok':'missing')+'">'+(r.signature_depart?'✅':'⬜')+' Client</span>';
-  html+='<span class="doc-chip '+(r.signature_vendeur_depart?'ok':'missing')+'">'+(r.signature_vendeur_depart?'✅':'⬜')+' Vendeur</span>';
-  html+='</div>';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'client\')">'+(r.signature_depart?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (vendeur)':'✍️ Signer (vendeur)')+'</button>';
-  html+='</div>';
 
   // Signatures — Retour
   html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Retour</div>';
