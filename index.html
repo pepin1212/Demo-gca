@@ -82,7 +82,8 @@ body { overflow-x: hidden; width: 100%; position: relative; font-family: -apple-
 
 /* CARDS */
 .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 12px; }
-.card-header { background: var(--blue); color: white; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; }
+.card-header { background: var(--blue); color: white; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.card-header-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .card-header.orange { background: var(--orange); }
 .card-title { font-size: 14px; font-weight: 700; }
 .card-sub { font-size: 11px; opacity: 0.8; margin-top: 2px; }
@@ -1291,6 +1292,10 @@ function openResaDetail(id) {
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'degradation\')">📷 Dégâts</button>';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'all\')">📷 Toutes</button>';
   html+='</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  html+='<button class="btn btn-success btn-sm" onclick="downloadZipDepart(\''+id+'\')">📦 ZIP Départ</button>';
+  html+='<button class="btn btn-success btn-sm" onclick="downloadZipRetour(\''+id+'\')">📦 ZIP Retour</button>';
+  html+='</div>';
   html+='<button class="btn btn-success btn-full" style="margin-bottom:8px" onclick="downloadAllDemoZip(\''+id+'\')">📦 Tout télécharger (ZIP)</button>';
   html+='<div style="display:flex;gap:8px">';
   html+='<button class="btn btn-light" style="flex:1" onclick="editResa(\''+id+'\')">✏️ Modifier</button>';
@@ -1319,7 +1324,23 @@ function editResa(id) {
 }
 
 function deleteResa(id) {
+  var r=getResa(id); if(!r) return;
+  var isOwner=!APP.isAdmin && r.vendeur===APP.user;
+
+  if(APP.isAdmin || isOwner) {
+    if(!confirm('Supprimer cette réservation ?')) return;
+    return doDeleteResa(id);
+  }
+
+  // Ni admin, ni propriétaire de la réservation : PIN administrateur requis
+  var pin=prompt('Cette réservation appartient à un autre vendeur.\nEntrez le PIN administrateur pour la supprimer :');
+  if(pin===null) return;
+  if(pin!==APP.adminPin) { showToast('PIN administrateur incorrect'); return; }
   if(!confirm('Supprimer cette réservation ?')) return;
+  doDeleteResa(id);
+}
+
+function doDeleteResa(id) {
   showLoader('Suppression...');
   deleteReservationFiles(id).then(function(){
     return sb.from('reservations').delete().eq('id',id);
@@ -1718,7 +1739,11 @@ function downloadAllPhotos(resaId, type) {
   }
 }
 
-function downloadAllDemoZip(resaId) {
+function downloadAllDemoZip(resaId) { downloadZip(resaId, 'all'); }
+function downloadZipDepart(resaId) { downloadZip(resaId, 'depart'); }
+function downloadZipRetour(resaId) { downloadZip(resaId, 'retour'); }
+
+function downloadZip(resaId, scope) {
   var r=getResa(resaId); if(!r) return;
   var veh=getVehicle(r.vehicle_id);
   showLoader('Création du ZIP...');
@@ -1731,30 +1756,62 @@ function downloadAllDemoZip(resaId) {
   fiche+='Vendeur: '+getVendeurDisplay(r.vendeur)+'\n';
   fiche+='Du '+formatDate(r.date_start)+' au '+formatDate(r.date_end)+'\n';
   fiche+='Entreprise cliente: '+(r.entreprise||'-')+'\n';
-  fiche+='Chauffeur: '+((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()+'\n';
-  fiche+='Téléphone chauffeur: '+(r.chauffeur_telephone||'-')+'\n';
+  if(scope==='all'||scope==='depart') {
+    fiche+='Chauffeur (départ): '+((r.chauffeur_prenom||'')+' '+(r.chauffeur_nom||'')).trim()+'\n';
+    fiche+='Téléphone chauffeur (départ): '+(r.chauffeur_telephone||'-')+'\n';
+  }
+  if(scope==='all'||scope==='retour') {
+    var chRNom=(r.chauffeur_retour_nom!=null)?r.chauffeur_retour_nom:r.chauffeur_nom;
+    var chRPrenom=(r.chauffeur_retour_prenom!=null)?r.chauffeur_retour_prenom:r.chauffeur_prenom;
+    var chRTel=(r.chauffeur_retour_telephone!=null)?r.chauffeur_retour_telephone:r.chauffeur_telephone;
+    fiche+='Chauffeur (retour): '+((chRPrenom||'')+' '+(chRNom||'')).trim()+'\n';
+    fiche+='Téléphone chauffeur (retour): '+(chRTel||'-')+'\n';
+  }
   fiche+='Permis vérifié: '+(r.permis_verifie?'Oui':'Non')+'\n';
   fiche+='Assurance vérifiée: '+(r.assurance_verifiee?'Oui':'Non')+'\n';
   fiche+='Note: '+(r.note||'-')+'\n';
   zip.file('fiche_reservation.txt', fiche);
 
-  // Documents
-  for(var k=0;k<RESA_DOCS.length;k++) {
-    var docKey='doc_'+slugify(RESA_DOCS[k]);
+  // Documents réservation (selon le scope)
+  var resaDocsForScope=RESA_DOCS;
+  if(scope==='depart') resaDocsForScope=['Contrat de Prêt','Assurance','Permis Chauffeur'];
+  if(scope==='retour') resaDocsForScope=['Rapport Conso'];
+  for(var k=0;k<resaDocsForScope.length;k++) {
+    var docKey='doc_'+slugify(resaDocsForScope[k]);
     var docFilesZip=getDocFiles(r, docKey);
     for(var dfi=0;dfi<docFilesZip.length;dfi++) {
       (function(url, name){
         promises.push(fetch(url).then(function(resp){return resp.blob();}).then(function(blob){
           zip.file('documents/'+name, blob);
         }).catch(function(){}));
-      })(docFilesZip[dfi].url, (dfi+1)+'_'+(docFilesZip[dfi].name||RESA_DOCS[k]+'.pdf'));
+      })(docFilesZip[dfi].url, (dfi+1)+'_'+(docFilesZip[dfi].name||resaDocsForScope[k]+'.pdf'));
     }
   }
 
-  // Photos
-  var allPhotos=(r.photos_depart||[]).map(function(u,i){return{url:u,name:'photos_depart/photo_'+(i+1)+'.jpg'};});
-  allPhotos=allPhotos.concat((r.photos_retour||[]).map(function(u,i){return{url:u,name:'photos_retour/photo_'+(i+1)+'.jpg'};}));
-  allPhotos=allPhotos.concat((r.photos_degradation||[]).map(function(item,i){return{url:item.url,name:'photos_degradation/photo_'+(i+1)+'.jpg'};}));
+  // Documents véhicule (carte grise, certificat homologation, agrément ADR) — toujours inclus
+  if(veh) {
+    for(var vk=0;vk<VEH_DOCS.length;vk++) {
+      var vkey='doc_'+slugify(VEH_DOCS[vk]);
+      var vehDocFilesZip=getDocFiles(veh, vkey);
+      for(var vfi=0;vfi<vehDocFilesZip.length;vfi++) {
+        (function(url, name){
+          promises.push(fetch(url).then(function(resp){return resp.blob();}).then(function(blob){
+            zip.file('documents_vehicule/'+name, blob);
+          }).catch(function(){}));
+        })(vehDocFilesZip[vfi].url, (vfi+1)+'_'+(vehDocFilesZip[vfi].name||VEH_DOCS[vk]+'.pdf'));
+      }
+    }
+  }
+
+  // Photos (selon le scope)
+  var allPhotos=[];
+  if(scope==='all'||scope==='depart') {
+    allPhotos=allPhotos.concat((r.photos_depart||[]).map(function(u,i){return{url:u,name:'photos_depart/photo_'+(i+1)+'.jpg'};}));
+  }
+  if(scope==='all'||scope==='retour') {
+    allPhotos=allPhotos.concat((r.photos_retour||[]).map(function(u,i){return{url:u,name:'photos_retour/photo_'+(i+1)+'.jpg'};}));
+    allPhotos=allPhotos.concat((r.photos_degradation||[]).map(function(item,i){return{url:item.url,name:'photos_degradation/photo_'+(i+1)+'.jpg'};}));
+  }
   for(var p=0;p<allPhotos.length;p++) {
     (function(item){
       promises.push(fetch(item.url).then(function(resp){return resp.blob();}).then(function(blob){
@@ -1763,32 +1820,38 @@ function downloadAllDemoZip(resaId) {
     })(allPhotos[p]);
   }
 
-  // Notes dégâts visibles constatés
-  var pdg=r.photos_degradation||[];
-  if(pdg.length>0) {
-    var notes='DÉGÂTS VISIBLES CONSTATÉS\n\n';
-    for(var n=0;n<pdg.length;n++) {
-      notes+='Photo '+(n+1)+': '+(pdg[n].note||'(sans description)')+'\n';
+  // Notes dégâts visibles constatés (retour uniquement)
+  if(scope==='all'||scope==='retour') {
+    var pdg=r.photos_degradation||[];
+    if(pdg.length>0) {
+      var notes='DÉGÂTS VISIBLES CONSTATÉS\n\n';
+      for(var n=0;n<pdg.length;n++) {
+        notes+='Photo '+(n+1)+': '+(pdg[n].note||'(sans description)')+'\n';
+      }
+      zip.file('photos_degradation/notes.txt', notes);
     }
-    zip.file('photos_degradation/notes.txt', notes);
   }
 
-  // PDF Départ et Retour
-  promises.push(genPdfConfirmation(resaId, 'depart', 'blob').then(function(result){
-    if(result && result.blob) zip.file(result.filename, result.blob);
-  }).catch(function(e){console.error('PDF départ ignoré:',e);}));
-
-  promises.push(genPdfConfirmation(resaId, 'retour', 'blob').then(function(result){
-    if(result && result.blob) zip.file(result.filename, result.blob);
-  }).catch(function(e){console.error('PDF retour ignoré:',e);}));
+  // PDF Départ et/ou Retour (selon le scope)
+  if(scope==='all'||scope==='depart') {
+    promises.push(genPdfConfirmation(resaId, 'depart', 'blob').then(function(result){
+      if(result && result.blob) zip.file(result.filename, result.blob);
+    }).catch(function(e){console.error('PDF départ ignoré:',e);}));
+  }
+  if(scope==='all'||scope==='retour') {
+    promises.push(genPdfConfirmation(resaId, 'retour', 'blob').then(function(result){
+      if(result && result.blob) zip.file(result.filename, result.blob);
+    }).catch(function(e){console.error('PDF retour ignoré:',e);}));
+  }
 
   Promise.all(promises).then(function(){
     return zip.generateAsync({type:'blob'});
   }).then(function(content){
     hideLoader();
+    var suffix=scope==='depart'?'depart':(scope==='retour'?'retour':'complet');
     var a=document.createElement('a');
     a.href=URL.createObjectURL(content);
-    a.download='demo_'+(veh?veh.immat:'veh')+'_'+r.date_start+'.zip';
+    a.download='demo_'+(veh?veh.immat:'veh')+'_'+suffix+'_'+r.date_start+'.zip';
     a.click();
   }).catch(function(e){hideLoader();showToast('Erreur ZIP');console.error(e);});
 }
@@ -2887,8 +2950,8 @@ function renderVehicleList() {
     html+='<div class="card">'+
       '<div class="card-header">'+
       '<img src="'+(v.photo_url||LOGO_B64)+'" alt="" style="width:44px;height:44px;border-radius:8px;object-fit:'+(v.photo_url?'cover':'contain')+';background:white;border:1px solid var(--gray-light);flex-shrink:0;margin-right:10px">'+
-      '<div style="flex:1"><div class="card-title">'+esc(v.immat)+'</div><div class="card-sub">'+(v.modele?esc(v.modele)+' · ':'')+resaCount+' réservation(s)</div></div>'+
-      '<div style="display:flex;gap:6px">'+
+      '<div style="flex:1;min-width:0"><div class="card-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(v.immat)+'</div><div class="card-sub" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(v.modele?esc(v.modele)+' · ':'')+resaCount+' réservation(s)</div></div>'+
+      '<div class="card-header-actions">'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleHistory(\''+v.id+'\')">🕒 Historique</button>'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleDocs(\''+v.id+'\')">📄 Docs</button>'+
       '<button class="btn btn-light btn-sm" onclick="editVehicle(\''+v.id+'\')">✏️</button></div></div>'+
@@ -3253,7 +3316,7 @@ function updateStorageBar() {
   sb.storage.from('daf-documents').list('', {limit:1000}).then(function(res){
     if(res.error) return;
     document.getElementById('storageBarWrap').style.display='block';
-    updateHeaderOffset();
+    requestAnimationFrame(function(){ requestAnimationFrame(updateHeaderOffset); });
     // Estimation grossière basée sur le nombre de fichiers
     var count=(res.data||[]).length;
     var estimatedMB=count*0.5; // 500Ko par fichier en moyenne
@@ -3302,6 +3365,15 @@ function updateHeaderOffset() {
 }
 window.addEventListener('resize', updateHeaderOffset);
 window.addEventListener('orientationchange', function(){ setTimeout(updateHeaderOffset, 200); });
+
+// Recalcule automatiquement --header-h dès que la hauteur du header change (ex: apparition de la barre de stockage)
+(function(){
+  var headerEl=document.getElementById('appHeader');
+  if(headerEl && window.ResizeObserver) {
+    var ro=new ResizeObserver(function(){ updateHeaderOffset(); });
+    ro.observe(headerEl);
+  }
+})();
 </script>
 </body>
 </html>
