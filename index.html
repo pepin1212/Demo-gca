@@ -1959,8 +1959,8 @@ function genPdfConfirmation(resaId, type, outputMode) {
   }
 
   if(heroImgData) {
-    var heroH=58;
-    var panelMinW=62; // largeur minimale du panneau titre/note (mm)
+    var heroH=68;
+    var panelMinW=66; // largeur minimale du panneau titre/note (mm)
 
     var props;
     try { props=doc.getImageProperties(heroImgData); } catch(e){ props={width:4,height:3}; }
@@ -1972,63 +1972,56 @@ function genPdfConfirmation(resaId, type, outputMode) {
     var panelW=contentW-imgW;
     var panelX=margin+imgW;
     var rr=3;
-    var COL_NAVY=[13,30,64];
 
-    // Cadre global arrondi englobant photo + panneau (clip commun pour coins homogènes)
+    // Cadre global arrondi englobant la photo (le panneau reste transparent)
     try {
       doc.saveGraphicsState();
-      roundedClip(doc, margin, y, contentW, heroH, rr);
+      roundedClip(doc, margin, y, imgW, heroH, rr);
 
       // Photo (contain dans sa zone, fond neutre si letterbox)
       doc.setFillColor(245,247,250);
       doc.rect(margin, y, imgW, heroH, 'F');
       doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH);
 
-      // Panneau navy uni
-      doc.setFillColor(COL_NAVY[0],COL_NAVY[1],COL_NAVY[2]);
-      doc.rect(panelX, y, panelW, heroH, 'F');
+      doc.restoreGraphicsState();
+
+      // Contour fin sur la photo
+      doc.setDrawColor(220,224,230);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(margin, y, imgW, heroH, rr, rr);
 
       // Liseré orange vertical à la jonction photo/panneau
       doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
-      doc.rect(panelX, y, 0.9, heroH, 'F');
-
-      doc.restoreGraphicsState();
-
-      // Contour fin sur l'ensemble
-      doc.setDrawColor(220,224,230);
-      doc.setLineWidth(0.3);
-      doc.roundedRect(margin, y, contentW, heroH, rr, rr);
+      doc.rect(panelX+1.5, y+4, 0.9, heroH-8, 'F');
     } catch(e){
-      try {
-        doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH);
-        doc.setFillColor(COL_NAVY[0],COL_NAVY[1],COL_NAVY[2]);
-        doc.rect(panelX, y, panelW, heroH, 'F');
-      } catch(e2){}
+      try { doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH); } catch(e2){}
     }
 
-    // ===== Texte du panneau =====
-    var padX=panelX+6;
-    var maxTextW=panelW-10;
+    // ===== Texte du panneau (fond transparent, texte bleu de la marque) =====
+    var padX=panelX+8;
+    var maxTextW=panelW-12;
 
-    // Petit label au-dessus du titre (capitales, espacées)
+    // Petit label au-dessus du titre (capitales, espacées), agrandi mais sur une seule ligne
     doc.setFont(undefined,'bold');
-    doc.setFontSize(7);
-    doc.setTextColor(255,255,255);
-    try { doc.setGState(new window.jspdf.GState({opacity:0.55})); } catch(e){}
+    doc.setFontSize(9.5);
+    doc.setTextColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
+    try { doc.setGState(new window.jspdf.GState({opacity:0.6})); } catch(e){}
     var labelTxt='VÉHICULE DE DÉMONSTRATION';
-    // Espacement manuel des lettres pour un effet "letter-spacing"
+    // Espacement manuel des lettres pour un effet "letter-spacing", sans retour à la ligne
     var spacedLabel=labelTxt.split('').join(String.fromCharCode(8202));
-    var labelLines=doc.splitTextToSize(spacedLabel, maxTextW);
-    var textY=y+9;
-    doc.text(labelLines[0], padX, textY);
+    while(doc.getTextWidth(spacedLabel)>maxTextW && spacedLabel.indexOf(String.fromCharCode(8202))!==-1) {
+      spacedLabel=spacedLabel.split(String.fromCharCode(8202)).join('');
+    }
+    var textY=y+11;
+    doc.text(spacedLabel, padX, textY);
     try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
 
     // Modèle en grand
-    textY+=7.5;
+    textY+=9;
     doc.setFont(undefined,'bold');
-    doc.setTextColor(255,255,255);
+    doc.setTextColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
     var modeleText=veh&&veh.modele?veh.modele:immat;
-    var titleSize=panelW<76?14:16;
+    var titleSize=panelW<80?16:18;
     doc.setFontSize(titleSize);
     var titleLines=doc.splitTextToSize(modeleText, maxTextW);
     var maxTitleLines=2;
@@ -2037,29 +2030,31 @@ function genPdfConfirmation(resaId, type, outputMode) {
     textY+=titleLines.length*(titleSize*0.42)+1;
 
     // Séparateur fin
-    textY+=2.5;
-    doc.setDrawColor(255,255,255);
+    textY+=3;
+    doc.setDrawColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
     try { doc.setGState(new window.jspdf.GState({opacity:0.25})); } catch(e){}
     doc.setLineWidth(0.3);
-    doc.line(padX, textY, padX+Math.min(maxTextW,28), textY);
+    doc.line(padX, textY, padX+Math.min(maxTextW,30), textY);
     try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
 
     // Immatriculation
-    textY+=5;
+    textY+=6;
     doc.setFont(undefined,'normal');
-    doc.setFontSize(9);
-    try { doc.setGState(new window.jspdf.GState({opacity:0.9})); } catch(e){}
+    doc.setFontSize(10);
+    doc.setTextColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
+    try { doc.setGState(new window.jspdf.GState({opacity:0.85})); } catch(e){}
     doc.text(immat, padX, textY);
     try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
-    textY+=6;
+    textY+=7;
 
     // Note commerciale
     if(veh && veh.note_commerciale) {
       doc.setFont(undefined,'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(8.5);
+      doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
       try { doc.setGState(new window.jspdf.GState({opacity:0.8})); } catch(e){}
       var availH=heroH-(textY-y)-4;
-      var maxLines=Math.max(1,Math.floor(availH/3.8));
+      var maxLines=Math.max(1,Math.floor(availH/4));
       var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, maxTextW);
       if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
       doc.text(heroNoteLines, padX, textY);
