@@ -158,6 +158,8 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .section-title { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid var(--orange); }
 .divider { height: 1px; background: #CBD5E1; margin: 16px 0; }
 .info-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--gray-light); font-size: 13px; }
+.gauge-track { width: 100%; height: 8px; background: var(--gray-light); border-radius: 4px; overflow: hidden; }
+.gauge-fill { height: 100%; border-radius: 4px; transition: width 0.35s ease; }
 .info-label { color: var(--gray); font-size: 12px; }
 .info-value { font-weight: 600; }
 
@@ -1101,6 +1103,17 @@ function openResaDetail(id) {
     html+='<div class="info-row"><span class="info-label">Distance parcourue</span><span class="info-value">'+(r.km_retour-r.km_depart).toLocaleString('fr-FR')+' km</span></div>';
   }
 
+  // Niveaux Carburant & AdBlue
+  html+='<div class="divider"></div><div class="section-title">⛽ Carburant & AdBlue</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">';
+  html+=gaugeFieldHtml(id, 'carburant_depart', '⛽ Carburant — Départ (%)', r.carburant_depart, '#F59E0B');
+  html+=gaugeFieldHtml(id, 'carburant_retour', '⛽ Carburant — Retour (%)', r.carburant_retour, '#F59E0B');
+  html+='</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  html+=gaugeFieldHtml(id, 'adblue_depart', '💧 AdBlue — Départ (%)', r.adblue_depart, '#3B82F6');
+  html+=gaugeFieldHtml(id, 'adblue_retour', '💧 AdBlue — Retour (%)', r.adblue_retour, '#3B82F6');
+  html+='</div>';
+
   html+='<div class="divider"></div><div class="section-title">Photos Départ</div>';
   html+='<div class="photo-grid" id="pdGrid_'+id+'">';
   var pd=r.photos_depart||[];
@@ -1124,8 +1137,8 @@ function openResaDetail(id) {
   html+='<input type="file" id="upPhotoR_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'retour\',this)">';
   html+='</div>';
 
-  // Photos dégradation
-  html+='<div class="divider"></div><div class="section-title">📸 Photos Dégradation</div>';
+  // Photos dégâts visibles constatés
+  html+='<div class="divider"></div><div class="section-title">📸 Dégâts visibles constatés</div>';
   html+='<div id="pdgList_'+id+'">';
   var pdg=r.photos_degradation||[];
   for(var p=0;p<pdg.length;p++) {
@@ -1138,7 +1151,7 @@ function openResaDetail(id) {
     html+='</div>';
   }
   html+='</div>';
-  html+='<label class="btn btn-full" for="upPhotoDg_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter photo dégradation</label>';
+  html+='<label class="btn btn-full" for="upPhotoDg_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter une photo de dégât constaté</label>';
   html+='<input type="file" id="upPhotoDg_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'degradation\',this)" style="display:none">';
 
   // Signatures — Départ
@@ -1174,7 +1187,7 @@ function openResaDetail(id) {
   html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'depart\')">📷 Départ</button>';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'retour\')">📷 Retour</button>';
-  html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'degradation\')">📷 Dégrad.</button>';
+  html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'degradation\')">📷 Dégâts</button>';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'all\')">📷 Toutes</button>';
   html+='</div>';
   html+='<button class="btn btn-success btn-full" style="margin-bottom:8px" onclick="downloadAllDemoZip(\''+id+'\')">📦 Tout télécharger (ZIP)</button>';
@@ -1313,6 +1326,59 @@ function uploadPhotos(resaId, type, input) {
       });
     })(files[i]);
   }
+}
+
+// Construit un champ "pourcentage + jauge animée" pour carburant/AdBlue
+function gaugeFieldHtml(resaId, field, label, value, color) {
+  var v=(value!=null)?value:'';
+  var pct=(value!=null)?Math.max(0,Math.min(100,value)):0;
+  var html='<div>';
+  html+='<label class="form-label">'+label+'</label>';
+  html+='<input type="number" min="0" max="100" class="form-input" id="'+field+'_'+resaId+'" value="'+v+'" placeholder="0" '+
+    'oninput="updateGaugeBar(\''+resaId+'\',\''+field+'\')" '+
+    'onchange="saveJaugeNiveau(\''+resaId+'\',\''+field+'\')">';
+  html+='<div class="gauge-track" style="margin-top:6px"><div class="gauge-fill" id="gaugeFill_'+field+'_'+resaId+'" style="width:'+pct+'%;background:'+color+'"></div></div>';
+  html+='</div>';
+  return html;
+}
+
+// Met à jour visuellement la jauge en temps réel pendant la saisie (sans sauvegarder)
+function updateGaugeBar(resaId, field) {
+  var input=document.getElementById(field+'_'+resaId);
+  var fill=document.getElementById('gaugeFill_'+field+'_'+resaId);
+  if(!input||!fill) return;
+  var val=parseInt(input.value);
+  if(isNaN(val)) val=0;
+  val=Math.max(0,Math.min(100,val));
+  fill.style.width=val+'%';
+}
+
+// Sauvegarde le niveau carburant/AdBlue, et synchronise le niveau actuel du véhicule au retour
+function saveJaugeNiveau(resaId, field) {
+  var r=getResa(resaId); if(!r) return;
+  var input=document.getElementById(field+'_'+resaId);
+  var val=input.value;
+  val=(val==='')?null:Math.max(0,Math.min(100,parseInt(val)));
+  if(val!=null) input.value=val;
+  updateGaugeBar(resaId, field);
+
+  var data={}; data[field]=val;
+  showLoader('Enregistrement...');
+  sb.from('reservations').update(data).eq('id',resaId).then(function(res){
+    if(res.error) throw res.error;
+    // Synchronisation du véhicule avec les niveaux relevés au retour
+    if(val!=null && field==='carburant_retour') {
+      return sb.from('vehicles').update({carburant_actuel:val}).eq('id',r.vehicle_id);
+    }
+    if(val!=null && field==='adblue_retour') {
+      return sb.from('vehicles').update({adblue_actuel:val}).eq('id',r.vehicle_id);
+    }
+  }).then(function(){
+    return Promise.all([loadVehicles(),loadReservations()]);
+  }).then(function(){
+    hideLoader();
+    showToast('Niveau enregistré');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
 function saveKilometrage(resaId) {
@@ -1532,10 +1598,10 @@ function downloadAllDemoZip(resaId) {
     })(allPhotos[p]);
   }
 
-  // Notes dégradation
+  // Notes dégâts visibles constatés
   var pdg=r.photos_degradation||[];
   if(pdg.length>0) {
-    var notes='PHOTOS DÉGRADATION\n\n';
+    var notes='DÉGÂTS VISIBLES CONSTATÉS\n\n';
     for(var n=0;n<pdg.length;n++) {
       notes+='Photo '+(n+1)+': '+(pdg[n].note||'(sans description)')+'\n';
     }
@@ -1847,6 +1913,52 @@ function genPdfConfirmation(resaId, type, outputMode) {
     y+=11;
   }
 
+  // ===== NIVEAUX CARBURANT & ADBLUE =====
+  // Dessine une jauge horizontale avec libellé, valeur en % et remplissage coloré
+  function drawGauge(label, value, x, gaugeY, w, color) {
+    doc.setFont(undefined,'bold');
+    doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+    doc.setFontSize(8);
+    doc.text(label, x, gaugeY);
+    doc.setFont(undefined,'bold');
+    doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+    doc.setFontSize(9.5);
+    doc.text((value!=null?value+' %':'—'), x+w, gaugeY, {align:'right'});
+
+    var barY=gaugeY+2, barH=2.4;
+    doc.setFillColor(230,233,240);
+    doc.roundedRect(x, barY, w, barH, 1, 1, 'F');
+    if(value!=null) {
+      var fillW=Math.max(0,Math.min(100,value))/100*w;
+      if(fillW>0) {
+        doc.setFillColor(color[0],color[1],color[2]);
+        doc.roundedRect(x, barY, fillW, barH, 1, 1, 'F');
+      }
+    }
+  }
+
+  var hasNiveauxDepart=(r.carburant_depart!=null || r.adblue_depart!=null);
+  var hasNiveauxRetour=(r.carburant_retour!=null || r.adblue_retour!=null);
+  var COL_FUEL=[245,158,11], COL_ADBLUE=[59,130,246];
+
+  if((type==='depart' && hasNiveauxDepart) || (type==='retour' && (hasNiveauxDepart||hasNiveauxRetour))) {
+    y=sectionBox('NIVEAUX CARBURANT & ADBLUE', y);
+    var halfW=(contentW-8)/2;
+
+    if(type==='depart') {
+      drawGauge('⛽ CARBURANT — DÉPART', r.carburant_depart, margin, y, halfW, COL_FUEL);
+      drawGauge('💧 ADBLUE — DÉPART', r.adblue_depart, margin+halfW+8, y, halfW, COL_ADBLUE);
+      y+=12;
+    } else {
+      drawGauge('⛽ CARBURANT — DÉPART', r.carburant_depart, margin, y, halfW, COL_FUEL);
+      drawGauge('💧 ADBLUE — DÉPART', r.adblue_depart, margin+halfW+8, y, halfW, COL_ADBLUE);
+      y+=12;
+      drawGauge('⛽ CARBURANT — RETOUR', r.carburant_retour, margin, y, halfW, COL_FUEL);
+      drawGauge('💧 ADBLUE — RETOUR', r.adblue_retour, margin+halfW+8, y, halfW, COL_ADBLUE);
+      y+=12;
+    }
+  }
+
   // ===== RESPONSABLE & CLIENT =====
   y=sectionBox('RESPONSABLE DAF & CLIENT', y);
   fieldLine('VENDEUR', r.vendeur, y, 0);
@@ -1985,7 +2097,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
         }
       }
 
-      // Signalement des dégradations (retour uniquement)
+      // Signalement des dégâts visibles constatés (retour uniquement)
       if(type==='retour') {
         var pdg=r.photos_degradation||[];
         if(pdg.length>0) {
@@ -1999,7 +2111,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
           doc.setFont(undefined,'bold');
           doc.setTextColor(255,255,255);
           doc.setFontSize(11);
-          doc.text('⚠ SIGNALEMENT DES DÉGRADATIONS', margin+4, y+7);
+          doc.text('⚠ DÉGÂTS VISIBLES CONSTATÉS', margin+4, y+7);
           y+=15;
 
           var loadDegPromises=pdg.map(function(item){
@@ -2056,7 +2168,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
                 doc.setFont(undefined,'bold');
                 doc.setTextColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
                 doc.setFontSize(9.5);
-                doc.text('Dégradation '+(it.idx+1), imgX, textY);
+                doc.text('Dégât constaté '+(it.idx+1), imgX, textY);
                 doc.setFont(undefined,'normal');
                 doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
                 doc.setFontSize(9);
@@ -2091,7 +2203,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
             addFooter(doc, pageW, pageH, margin);
             var filename='gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf';
             return finishPdf(filename).then(function(result){
-              if(outputMode==='save') showToast('PDF généré (sans photos dégradation)');
+              if(outputMode==='save') showToast('PDF généré (sans photos de dégâts constatés)');
               return result;
             });
           });
@@ -2481,6 +2593,8 @@ function renderVehicleList() {
     var infoHtml='';
     if(v.modele) infoHtml+='<div class="info-row"><span class="info-label">Modèle</span><span class="info-value">'+esc(v.modele)+'</span></div>';
     if(v.kilometrage_actuel) infoHtml+='<div class="info-row"><span class="info-label">Kilométrage</span><span class="info-value">'+v.kilometrage_actuel.toLocaleString('fr-FR')+' km</span></div>';
+    if(v.carburant_actuel!=null) infoHtml+='<div class="info-row"><span class="info-label">⛽ Carburant</span><span class="info-value">'+v.carburant_actuel+'%</span></div>';
+    if(v.adblue_actuel!=null) infoHtml+='<div class="info-row"><span class="info-label">💧 AdBlue</span><span class="info-value">'+v.adblue_actuel+'%</span></div>';
     if(v.date_controle_technique) infoHtml+='<div class="info-row"><span class="info-label">Contrôle technique</span><span class="info-value">'+formatDate(v.date_controle_technique)+'</span></div>';
     if(v.date_chronotachygraphe) infoHtml+='<div class="info-row"><span class="info-label">Chronotachygraphe</span><span class="info-value">'+formatDate(v.date_chronotachygraphe)+'</span></div>';
     if(v.date_revision) infoHtml+='<div class="info-row"><span class="info-label">Révision</span><span class="info-value">'+formatDate(v.date_revision)+'</span></div>';
