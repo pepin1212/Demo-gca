@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/signature_pad/4.1.7/signature_pad.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <style>
 :root {
   --blue: #003087;
@@ -40,6 +41,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .login-form { width: 100%; max-width: 320px; margin-top: 24px; }
 .login-input { width: 100%; padding: 14px 18px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.12); color: white; font-size: 16px; font-weight: 600; text-align: center; outline: none; }
 .login-input::placeholder { color: rgba(255,255,255,0.5); font-weight: 400; }
+.login-input option { color: #1a1a1a; }
 .login-pin { margin-top: 10px; letter-spacing: 6px; font-size: 20px; }
 .login-btn { margin-top: 14px; width: 100%; padding: 14px; background: var(--orange); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; }
 .login-error { color: #ffcccc; font-size: 13px; margin-top: 8px; text-align: center; display: none; }
@@ -232,7 +234,9 @@ input[type="file"] { display: none; }
     <div class="login-sub">Gestion des véhicules de démonstration</div>
   </div>
   <div class="login-form">
-    <input class="login-input" type="text" id="loginName" placeholder="Votre prénom" autocapitalize="words">
+    <select class="login-input" id="loginName" style="-webkit-appearance:none;appearance:none">
+      <option value="">Chargement...</option>
+    </select>
     <input class="login-input login-pin" type="password" inputmode="numeric" id="loginPin" placeholder="Code PIN" maxlength="6" style="margin-top:10px">
     <div class="login-error" id="loginError">Code PIN incorrect</div>
     <button class="login-btn" onclick="doLogin()">Accéder →</button>
@@ -288,7 +292,7 @@ input[type="file"] { display: none; }
 <div class="page" id="page-documents">
   <div class="page-header-sticky">
     <div class="page-title">Documents</div>
-    <button class="btn btn-primary btn-sm" onclick="openArchiveModal()">📦 Archiver</button>
+    <button class="btn btn-primary btn-sm" id="archiveBtn" style="display:none" onclick="openArchiveModal()">📦 Archiver</button>
   </div>
   <div class="form-group">
     <input type="text" class="form-input" id="docSearch" placeholder="🔍 Rechercher..." oninput="renderDocsList()">
@@ -310,6 +314,24 @@ input[type="file"] { display: none; }
   <div id="vehicleList"></div>
 </div>
 
+<div class="page" id="page-vendors">
+  <div class="page-header-sticky">
+    <div class="page-title">Vendeurs</div>
+    <button class="btn btn-orange btn-sm" onclick="openAddVendor()">+ Ajouter</button>
+  </div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-body">
+      <div class="section-title" style="margin-top:0">⚙️ Code PIN administrateur</div>
+      <p style="font-size:11px;color:var(--gray);margin-bottom:8px">Ce PIN permet de se connecter en tant qu'Administrateur et d'accéder à l'archivage et à cette page.</p>
+      <div style="display:flex;gap:8px">
+        <input type="password" inputmode="numeric" maxlength="6" class="form-input" id="adminPinInput" placeholder="Code PIN admin">
+        <button class="btn btn-primary" onclick="saveAdminPin()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+  <div id="vendorList"></div>
+</div>
+
 <!-- BOTTOM NAV -->
 <div class="bottom-nav" id="bottomNav" style="display:none">
   <button class="nav-btn active" onclick="showPage('planning',this)" id="nav-planning">
@@ -323,6 +345,10 @@ input[type="file"] { display: none; }
   <button class="nav-btn" onclick="showPage('vehicules',this)" id="nav-vehicules">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
     Véhicules<div class="nav-dot"></div>
+  </button>
+  <button class="nav-btn" onclick="showPage('vendors',this)" id="nav-vendors" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Vendeurs<div class="nav-dot"></div>
   </button>
 </div>
 
@@ -383,6 +409,23 @@ input[type="file"] { display: none; }
         <button class="btn btn-light" style="flex:1" onclick="clearSignature()">🗑️ Effacer</button>
         <button class="btn btn-primary" style="flex:2" onclick="saveSignature()">✅ Valider la signature</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalVendor">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="modalVendorTitle">Nouveau vendeur</div>
+      <button class="modal-close" onclick="closeModal('modalVendor')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Prénom</label><input type="text" class="form-input" id="vendorPrenom" placeholder="Prénom"></div>
+      <div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="vendorNom" placeholder="Nom"></div>
+      <div class="form-group"><label class="form-label">Code PIN</label><input type="password" inputmode="numeric" maxlength="6" class="form-input" id="vendorPin" placeholder="Code PIN (4 à 6 chiffres)"></div>
+      <input type="hidden" id="editVendorId">
+      <button class="btn btn-primary btn-full" onclick="saveVendor()">Enregistrer</button>
     </div>
   </div>
 </div>
@@ -489,8 +532,6 @@ input[type="file"] { display: none; }
 // =============================================
 var SUPABASE_URL = 'https://cqrhnvxitzffjsmkqvsj.supabase.co';
 var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNxcmhudnhpdHpmZmpzbWtxdnNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNDU2NTgsImV4cCI6MjA5NjkyMTY1OH0.Z0i4jTEw0FKOQxUWqCQq-4y-FkEcU2l-xglJ0yHraUo';
-var PIN = '123456'; // CHANGER CE CODE PIN
-
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // =============================================
@@ -503,8 +544,11 @@ var LOGO_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACCQAAARvCAYAAADKE6
 // =============================================
 var APP = {
   user: null,
+  isAdmin: false,
   vehicles: [],
   reservations: [],
+  vendors: [],
+  adminPin: '123456',
   currentMonth: new Date(),
   selectedVehicleId: null,
   resaFilter: 'current',
@@ -542,33 +586,86 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.getElementById('loginLogo').src = LOGO_B64;
 document.getElementById('headerLogo').src = LOGO_B64;
 
+function loadVendorsForLogin() {
+  return sb.from('vendors').select('*').order('prenom').then(function(res){
+    if(res.error) throw res.error;
+    APP.vendors = res.data || [];
+    return sb.from('app_settings').select('*').eq('key','admin_pin').then(function(res2){
+      if(!res2.error && res2.data && res2.data.length>0) APP.adminPin=res2.data[0].value;
+    });
+  }).then(function(){
+    populateLoginDropdown();
+  }).catch(function(e){
+    console.error('loadVendorsForLogin error:',e);
+    populateLoginDropdown();
+  });
+}
+
+function populateLoginDropdown() {
+  var sel=document.getElementById('loginName');
+  var html='<option value="">— Sélectionnez votre nom —</option>';
+  for(var i=0;i<APP.vendors.length;i++) {
+    var v=APP.vendors[i];
+    var fullName=((v.prenom||'')+' '+(v.nom||'')).trim();
+    html+='<option value="'+esc(fullName)+'" data-pin="'+esc(v.pin||'')+'" data-admin="0">'+esc(fullName)+'</option>';
+  }
+  html+='<option value="Administrateur" data-pin="" data-admin="1">⚙️ Administrateur</option>';
+  sel.innerHTML=html;
+
+  var savedUser=localStorage.getItem('daf_user');
+  if(savedUser) {
+    for(var j=0;j<sel.options.length;j++) {
+      if(sel.options[j].value===savedUser) { sel.selectedIndex=j; break; }
+    }
+  }
+}
+
 function doLogin() {
-  var name = document.getElementById('loginName').value.trim();
+  var sel=document.getElementById('loginName');
+  var name = sel.value;
   var pin = document.getElementById('loginPin').value.trim();
-  if(!name) { showToast('Entrez votre prénom'); return; }
-  if(pin !== PIN) {
+  if(!name) { showToast('Sélectionnez votre nom'); return; }
+
+  var opt=sel.options[sel.selectedIndex];
+  var isAdmin=opt.getAttribute('data-admin')==='1';
+  var expectedPin=isAdmin?APP.adminPin:opt.getAttribute('data-pin');
+
+  if(pin !== expectedPin) {
     document.getElementById('loginError').style.display='block';
     return;
   }
+  document.getElementById('loginError').style.display='none';
   APP.user = name;
+  APP.isAdmin = isAdmin;
   localStorage.setItem('daf_user', name);
+  localStorage.setItem('daf_is_admin', isAdmin?'1':'0');
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appHeader').style.display='block';
   document.getElementById('bottomNav').style.display='flex';
   document.getElementById('userChip').textContent=name;
-  document.getElementById('resaVendeur').value=name;
+  document.getElementById('resaVendeur').value=isAdmin?'':name;
+  applyAdminVisibility();
   loadAll();
   updateHeaderOffset();
+}
+
+function applyAdminVisibility() {
+  var navVendors=document.getElementById('nav-vendors');
+  var archiveBtn=document.getElementById('archiveBtn');
+  if(navVendors) navVendors.style.display=APP.isAdmin?'':'none';
+  if(archiveBtn) archiveBtn.style.display=APP.isAdmin?'':'none';
 }
 
 function logout() {
   if(!confirm('Changer d\'utilisateur ?')) return;
   localStorage.removeItem('daf_user');
+  localStorage.removeItem('daf_is_admin');
   location.reload();
 }
 
 document.getElementById('loginPin').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
-document.getElementById('loginName').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('loginPin').focus(); });
+
+loadVendorsForLogin();
 
 // =============================================
 // SUPABASE DATA
@@ -653,6 +750,7 @@ function showPage(id, btn) {
   if(id==='planning') renderPlanning();
   if(id==='documents') renderDocsList();
   if(id==='vehicules') renderVehicleList();
+  if(id==='vendors') renderVendorPage();
 }
 
 function render() {
@@ -793,7 +891,7 @@ function openNewResa() {
   document.getElementById('editResaId').value='';
   document.getElementById('resaStart').value='';
   document.getElementById('resaEnd').value='';
-  document.getElementById('resaVendeur').value=APP.user||'';
+  document.getElementById('resaVendeur').value=(APP.isAdmin?'':APP.user)||'';
   document.getElementById('resaEntreprise').value='';
   document.getElementById('resaNote').value='';
   document.getElementById('conflictWarn').style.display='none';
@@ -1060,13 +1158,16 @@ function editResa(id) {
 function deleteResa(id) {
   if(!confirm('Supprimer cette réservation ?')) return;
   showLoader('Suppression...');
-  sb.from('reservations').delete().eq('id',id).then(function(res){
+  deleteReservationFiles(id).then(function(){
+    return sb.from('reservations').delete().eq('id',id);
+  }).then(function(res){
     if(res.error) throw res.error;
     return loadReservations();
   }).then(function(){
     hideLoader();
     closeModal('modalResaDetail');
     render();
+    updateStorageBar();
     showToast('Réservation supprimée');
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
@@ -1392,6 +1493,15 @@ function downloadAllDemoZip(resaId) {
     zip.file('photos_degradation/notes.txt', notes);
   }
 
+  // PDF Départ et Retour
+  promises.push(genPdfConfirmation(resaId, 'depart', 'blob').then(function(result){
+    if(result && result.blob) zip.file(result.filename, result.blob);
+  }).catch(function(e){console.error('PDF départ ignoré:',e);}));
+
+  promises.push(genPdfConfirmation(resaId, 'retour', 'blob').then(function(result){
+    if(result && result.blob) zip.file(result.filename, result.blob);
+  }).catch(function(e){console.error('PDF retour ignoré:',e);}));
+
   Promise.all(promises).then(function(){
     return zip.generateAsync({type:'blob'});
   }).then(function(content){
@@ -1409,11 +1519,32 @@ function downloadAllDemoZip(resaId) {
 function genPdfDepart(resaId) { genPdfConfirmation(resaId, 'depart'); }
 function genPdfRetour(resaId) { genPdfConfirmation(resaId, 'retour'); }
 
-function genPdfConfirmation(resaId, type) {
-  var r=getResa(resaId); if(!r) return;
+function genPdfConfirmation(resaId, type, outputMode) {
+  outputMode=outputMode||'save';
+  var r=getResa(resaId); if(!r) return Promise.resolve(null);
   var veh=getVehicle(r.vehicle_id);
   var immat=veh?veh.immat:'—';
-  showLoader('Génération du PDF...');
+  if(outputMode==='save') showLoader('Génération du PDF...');
+
+  // Finalise le document : ajoute les annexes véhicule (départ), puis télécharge (mode 'save') ou retourne {blob, filename} (mode 'blob')
+  function finishPdf(filename) {
+    var basePromise;
+    if(type==='depart' && veh) basePromise=mergeVehicleDocAnnexes(doc, veh);
+    else basePromise=Promise.resolve(doc.output('arraybuffer'));
+
+    return basePromise.then(function(finalBytes){
+      var blob=new Blob([finalBytes], {type:'application/pdf'});
+      if(outputMode==='blob') {
+        return {blob:blob, filename:filename};
+      }
+      hideLoader();
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url; a.download=filename; a.click();
+      setTimeout(function(){URL.revokeObjectURL(url);}, 5000);
+      return null;
+    });
+  }
 
   var jsPDF=window.jspdf.jsPDF;
   var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
@@ -1527,45 +1658,83 @@ function genPdfConfirmation(resaId, type) {
   }
 
   if(heroImgData) {
-    // Titre (modèle) en gros et gras
-    doc.setFont(undefined,'bold');
-    doc.setTextColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
-    doc.setFontSize(18);
-    doc.text(veh&&veh.modele?veh.modele:immat, margin, y+6);
-    y+=9;
+    var heroH=62;
 
-    // Note commerciale juste en dessous du titre
-    if(veh && veh.note_commerciale) {
+    // Recadrage "cover" via canvas pour remplir le bandeau sans déformation ni lettrboxing
+    return cropImageCover(heroImgData, contentW, heroH).then(function(croppedImgData){
+      // Photo plein cadre, coins légèrement arrondis avec clip
+      try {
+        doc.saveGraphicsState();
+        var rPath=3;
+        roundedClip(doc, margin, y, contentW, heroH, rPath);
+        doc.addImage(croppedImgData,'JPEG',margin,y,contentW,heroH);
+        doc.restoreGraphicsState();
+      } catch(e){
+        try { doc.addImage(croppedImgData,'JPEG',margin,y,contentW,heroH); } catch(e2){}
+      }
+
+      // Dégradé sombre en bas de la photo pour la lisibilité du bandeau de titre
+      var gradH=22;
+      var gradSteps=24;
+      for(var g=0;g<gradSteps;g++) {
+        var gh=gradH/gradSteps;
+        var gy=y+heroH-gradH+g*gh;
+        var alpha=(g/gradSteps)*0.75;
+        doc.setFillColor(0,0,0);
+        try { doc.setGState(new window.jspdf.GState({opacity:alpha})); } catch(e){}
+        doc.rect(margin, gy, contentW, gh+0.3, 'F');
+      }
+      try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
+
+      // Liseré orange en bas du bandeau photo
+      doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
+      doc.rect(margin, y+heroH-1, contentW, 1, 'F');
+
+      // Modèle en gros et gras, sur la photo
+      doc.setFont(undefined,'bold');
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(19);
+      doc.text(veh&&veh.modele?veh.modele:immat, margin+5, y+heroH-12.5);
+
+      // Sous-titre immatriculation
       doc.setFont(undefined,'normal');
-      doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
-      doc.setFontSize(9.5);
-      var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, contentW);
-      var maxLines=2;
-      if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
-      doc.text(heroNoteLines, margin, y+3);
-      y+=heroNoteLines.length*4.5+3;
-    }
+      doc.setFontSize(9);
+      doc.setTextColor(255,255,255);
+      try { doc.setGState(new window.jspdf.GState({opacity:0.85})); } catch(e){}
+      doc.text('Véhicule de démonstration · '+immat, margin+5, y+heroH-6.5);
+      try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
 
-    // Photo véhicule, ratio préservé (pas d'étirement)
-    var heroBoxH=58;
-    doc.setFillColor(COL_LIGHT_BG[0],COL_LIGHT_BG[1],COL_LIGHT_BG[2]);
-    doc.rect(margin,y,contentW,heroBoxH,'F');
-    doc.setDrawColor(220,224,230);
-    doc.setLineWidth(0.3);
-    doc.rect(margin,y,contentW,heroBoxH);
+      y+=heroH+6;
 
-    try {
-      var props=doc.getImageProperties(heroImgData);
-      var ratio=props.width/props.height;
-      var drawW=contentW, drawH=contentW/ratio;
-      if(drawH>heroBoxH) { drawH=heroBoxH; drawW=heroBoxH*ratio; }
-      var imgX=margin+(contentW-drawW)/2;
-      var imgY=y+(heroBoxH-drawH)/2;
-      doc.addImage(heroImgData,'JPEG',imgX,imgY,drawW,drawH);
-    } catch(e){}
+      // Carte note commerciale, sous la photo
+      if(veh && veh.note_commerciale) {
+        doc.setFont(undefined,'normal');
+        doc.setFontSize(9.5);
+        var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, contentW-10);
+        var maxLines=3;
+        if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
+        var noteBoxH=heroNoteLines.length*4.6+8;
 
-    y+=heroBoxH+8;
+        doc.setFillColor(COL_LIGHT_BG[0],COL_LIGHT_BG[1],COL_LIGHT_BG[2]);
+        doc.rect(margin, y, contentW, noteBoxH, 'F');
+        doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
+        doc.rect(margin, y, 1.5, noteBoxH, 'F');
+
+        doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+        doc.text(heroNoteLines, margin+5, y+5.5);
+
+        y+=noteBoxH+8;
+      } else {
+        y+=2;
+      }
+
+      return continueGenPdf();
+    });
   }
+
+  return continueGenPdf();
+
+  function continueGenPdf() {
 
   // Référence + date
   doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
@@ -1723,7 +1892,7 @@ function genPdfConfirmation(resaId, type) {
       }).catch(function(){return null;});
     });
 
-    Promise.all(loadPhotosPromises).then(function(imgInfos){
+    return Promise.all(loadPhotosPromises).then(function(imgInfos){
       var rowItems=[];
       function flushRow() {
         if(rowItems.length===0) return;
@@ -1861,42 +2030,175 @@ function genPdfConfirmation(resaId, type) {
             }
             flushDegRow();
 
-            addSignatureSection().then(function(){
+            return addSignatureSection().then(function(){
               addFooter(doc, pageW, pageH, margin);
-              hideLoader();
-              doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-              showToast('PDF généré');
+              var filename='gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf';
+              return finishPdf(filename).then(function(result){
+                if(outputMode==='save') showToast('PDF généré');
+                return result;
+              });
             });
           }).catch(function(e){
             addFooter(doc, pageW, pageH, margin);
-            hideLoader();
-            doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-            showToast('PDF généré (sans photos dégradation)');
+            var filename='gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf';
+            return finishPdf(filename).then(function(result){
+              if(outputMode==='save') showToast('PDF généré (sans photos dégradation)');
+              return result;
+            });
           });
         }
       }
 
-      addSignatureSection().then(function(){
+      return addSignatureSection().then(function(){
         addFooter(doc, pageW, pageH, margin);
-        hideLoader();
-        doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-        showToast('PDF généré');
+        var filename='gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf';
+        return finishPdf(filename).then(function(result){
+          if(outputMode==='save') showToast('PDF généré');
+          return result;
+        });
       });
     }).catch(function(e){
       addFooter(doc, pageW, pageH, margin);
-      hideLoader();
-      doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-      showToast('PDF généré (sans photos)');
+      var filename='gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf';
+      return finishPdf(filename).then(function(result){
+        if(outputMode==='save') showToast('PDF généré (sans photos)');
+        return result;
+      });
     });
   } else {
-    addSignatureSection().then(function(){
+    return addSignatureSection().then(function(){
       addFooter(doc, pageW, pageH, margin);
-      hideLoader();
-      doc.save('gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf');
-      showToast('PDF généré');
+      var filename='gca_daf_'+type+'_'+immat+'_'+r.date_start+'.pdf';
+      return finishPdf(filename).then(function(result){
+        if(outputMode==='save') showToast('PDF généré');
+        return result;
+      });
     });
   }
+  } // fin continueGenPdf
   }); // fin heroPromise.then
+}
+
+// Fusionne le PDF principal (jsPDF) avec les documents véhicule (carte grise, certificat homologation, agrément ADR)
+// en pages annexes, via pdf-lib. Retourne une Promise<Uint8Array> (bytes du PDF final).
+function mergeVehicleDocAnnexes(mainDoc, veh) {
+  var mainBytes=mainDoc.output('arraybuffer');
+  var PDFLib=window.PDFLib;
+  if(!PDFLib) return Promise.resolve(mainBytes);
+
+  var annexDocs=[
+    {label:'Carte Grise', key:'doc_carte_grise'},
+    {label:'Certificat Homologation', key:'doc_certificat_homologation'},
+    {label:'Agrément ADR', key:'doc_agr_ment_adr'}
+  ];
+  var toFetch=annexDocs.filter(function(a){return !!veh[a.key];});
+
+  if(toFetch.length===0) return Promise.resolve(mainBytes);
+
+  return PDFLib.PDFDocument.load(mainBytes).then(function(finalPdf){
+    var chain=Promise.resolve();
+    toFetch.forEach(function(a){
+      chain=chain.then(function(){
+        return fetch(veh[a.key]).then(function(resp){return resp.arrayBuffer();}).then(function(bytes){
+          return appendAnnexToPdf(finalPdf, bytes, a.label, veh[a.key+'_name']||'');
+        }).catch(function(e){console.error('Annexe '+a.label+' ignorée:',e);});
+      });
+    });
+    return chain.then(function(){
+      return finalPdf.save();
+    });
+  }).catch(function(e){
+    console.error('mergeVehicleDocAnnexes error:',e);
+    return mainBytes;
+  });
+}
+
+// Ajoute un document (PDF ou image) comme page(s) annexe(s) dans finalPdf, précédé d'une page de séparation titrée
+function appendAnnexToPdf(finalPdf, bytes, label, filename) {
+  var PDFLib=window.PDFLib;
+  // Page de séparation
+  var sepPage=finalPdf.addPage([595.28, 841.89]); // A4 en points
+  sepPage.drawRectangle({x:0, y:0, width:595.28, height:841.89, color:PDFLib.rgb(1,1,1)});
+  sepPage.drawRectangle({x:0, y:760, width:595.28, height:81.89, color:PDFLib.rgb(0,48/255,135/255)});
+  sepPage.drawRectangle({x:0, y:756, width:595.28, height:3.4, color:PDFLib.rgb(232/255,96/255,28/255)});
+  sepPage.drawText('ANNEXE — DOCUMENT VÉHICULE', {x:51, y:800, size:18, color:PDFLib.rgb(1,1,1)});
+  sepPage.drawText(label, {x:51, y:680, size:22, color:PDFLib.rgb(0,48/255,135/255)});
+
+  var ext=(filename.split('.').pop()||'').toLowerCase();
+  var isPdf=ext==='pdf'||looksLikePdf(bytes);
+
+  if(isPdf) {
+    return PDFLib.PDFDocument.load(bytes).then(function(srcPdf){
+      return finalPdf.copyPages(srcPdf, srcPdf.getPageIndices());
+    }).then(function(copiedPages){
+      copiedPages.forEach(function(p){ finalPdf.addPage(p); });
+    }).catch(function(e){
+      console.error('Erreur insertion PDF annexe '+label+':', e);
+    });
+  } else {
+    // Image (jpg/png) : page A4 avec l'image centrée, ratio préservé
+    var embedPromise=ext==='png'?finalPdf.embedPng(bytes):finalPdf.embedJpg(bytes);
+    return embedPromise.then(function(img){
+      var page=finalPdf.addPage([595.28, 841.89]);
+      var maxW=595.28-80, maxH=841.89-160;
+      var ratio=Math.min(maxW/img.width, maxH/img.height, 1);
+      var w=img.width*ratio, h=img.height*ratio;
+      page.drawImage(img, {x:(595.28-w)/2, y:(841.89-h)/2, width:w, height:h});
+    }).catch(function(e){
+      console.error('Erreur insertion image annexe '+label+':', e);
+    });
+  }
+}
+
+// Détection basique : un PDF commence par "%PDF"
+function looksLikePdf(arrayBuffer) {
+  try {
+    var bytes=new Uint8Array(arrayBuffer.slice(0,4));
+    var str=String.fromCharCode(bytes[0],bytes[1],bytes[2],bytes[3]);
+    return str==='%PDF';
+  } catch(e) { return false; }
+}
+
+// Recadrage "cover" d'une image (dataURL) pour remplir exactement w x h (mm, ratio conservé via canvas px)
+function cropImageCover(dataUrl, wMm, hMm) {
+  return new Promise(function(resolve){
+    var img=new Image();
+    img.onload=function(){
+      try {
+        var targetRatio=wMm/hMm;
+        var srcRatio=img.naturalWidth/img.naturalHeight;
+        var sx,sy,sw,sh;
+        if(srcRatio>targetRatio) {
+          // image plus large que la cible : on rogne les côtés
+          sh=img.naturalHeight;
+          sw=sh*targetRatio;
+          sx=(img.naturalWidth-sw)/2;
+          sy=0;
+        } else {
+          // image plus haute que la cible : on rogne le haut/bas
+          sw=img.naturalWidth;
+          sh=sw/targetRatio;
+          sx=0;
+          sy=(img.naturalHeight-sh)/2;
+        }
+        var outW=900;
+        var outH=outW/targetRatio;
+        var canvas=document.createElement('canvas');
+        canvas.width=outW; canvas.height=outH;
+        var ctx=canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+        resolve(canvas.toDataURL('image/jpeg', 0.88));
+      } catch(e) { resolve(dataUrl); }
+    };
+    img.onerror=function(){ resolve(dataUrl); };
+    img.src=dataUrl;
+  });
+}
+
+// Applique un clip rectangulaire à coins arrondis sur la zone de dessin courante (jsPDF 2.x)
+function roundedClip(doc, x, y, w, h, r) {
+  doc.roundedRect(x, y, w, h, r, r, null);
+  doc.clip();
 }
 
 // Pied de page sobre sur toutes les pages du document
@@ -2080,7 +2382,9 @@ function doArchive() {
   if(confirm(toArchive.length+' réservation(s) exportées.\nSupprimer ces données de Supabase pour libérer du stockage ?')) {
     showLoader('Suppression...');
     var ids=toArchive.map(function(r){return r.id;});
-    sb.from('reservations').delete().in('id',ids).then(function(res){
+    Promise.all(ids.map(function(id){return deleteReservationFiles(id);})).then(function(){
+      return sb.from('reservations').delete().in('id',ids);
+    }).then(function(res){
       if(res.error) throw res.error;
       return loadReservations();
     }).then(function(){
@@ -2095,6 +2399,16 @@ function doArchive() {
     closeModal('modalArchive');
     showToast('PDF téléchargé (données conservées)');
   }
+}
+
+// Supprime tous les fichiers du storage associés à une réservation (photos, signatures, documents)
+function deleteReservationFiles(resaId) {
+  var prefix='reservations/'+resaId;
+  return sb.storage.from('daf-documents').list(prefix, {limit:1000}).then(function(res){
+    if(res.error || !res.data || res.data.length===0) return;
+    var paths=res.data.map(function(f){return prefix+'/'+f.name;});
+    return sb.storage.from('daf-documents').remove(paths);
+  }).catch(function(e){console.error('deleteReservationFiles error:',e);});
 }
 
 // =============================================
@@ -2276,6 +2590,107 @@ function deleteVehicle(id) {
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
+// =============================================
+// VENDEURS (admin)
+// =============================================
+function renderVendorPage() {
+  document.getElementById('adminPinInput').value=APP.adminPin||'';
+  return sb.from('vendors').select('*').order('prenom').then(function(res){
+    if(res.error) throw res.error;
+    APP.vendors=res.data||[];
+    renderVendorList();
+  }).catch(function(e){showToast('Erreur chargement vendeurs');console.error(e);});
+}
+
+function renderVendorList() {
+  var html='';
+  if(APP.vendors.length===0) {
+    html='<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">Aucun vendeur</div><div class="empty-sub">Ajoutez les vendeurs autorisés à se connecter</div></div>';
+  }
+  for(var i=0;i<APP.vendors.length;i++) {
+    var v=APP.vendors[i];
+    var fullName=((v.prenom||'')+' '+(v.nom||'')).trim();
+    html+='<div class="card"><div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:10px">'+
+      '<div><div style="font-size:14px;font-weight:700">'+esc(fullName)+'</div>'+
+      '<div style="font-size:12px;color:var(--gray);letter-spacing:2px;margin-top:2px">PIN : '+esc(v.pin||'')+'</div></div>'+
+      '<div style="display:flex;gap:6px">'+
+      '<button class="btn btn-light btn-sm" onclick="editVendor(\''+v.id+'\')">✏️</button>'+
+      '<button class="btn btn-danger btn-sm" onclick="deleteVendor(\''+v.id+'\')">🗑️</button>'+
+      '</div></div></div>';
+  }
+  document.getElementById('vendorList').innerHTML=html;
+}
+
+function openAddVendor() {
+  document.getElementById('modalVendorTitle').textContent='Nouveau vendeur';
+  document.getElementById('vendorPrenom').value='';
+  document.getElementById('vendorNom').value='';
+  document.getElementById('vendorPin').value='';
+  document.getElementById('editVendorId').value='';
+  openModal('modalVendor');
+}
+
+function editVendor(id) {
+  var v=null;
+  for(var i=0;i<APP.vendors.length;i++) if(APP.vendors[i].id===id) v=APP.vendors[i];
+  if(!v) return;
+  document.getElementById('modalVendorTitle').textContent='Modifier vendeur';
+  document.getElementById('vendorPrenom').value=v.prenom||'';
+  document.getElementById('vendorNom').value=v.nom||'';
+  document.getElementById('vendorPin').value=v.pin||'';
+  document.getElementById('editVendorId').value=id;
+  openModal('modalVendor');
+}
+
+function saveVendor() {
+  var prenom=document.getElementById('vendorPrenom').value.trim();
+  var nom=document.getElementById('vendorNom').value.trim();
+  var pin=document.getElementById('vendorPin').value.trim();
+  var editId=document.getElementById('editVendorId').value;
+  if(!prenom) return showToast('Prénom requis');
+  if(!pin||pin.length<4) return showToast('Code PIN requis (4 à 6 chiffres)');
+
+  var data={prenom:prenom, nom:nom||null, pin:pin};
+  showLoader('Enregistrement...');
+  var promise;
+  if(editId) promise=sb.from('vendors').update(data).eq('id',editId);
+  else promise=sb.from('vendors').insert(data).select();
+  promise.then(function(res){
+    if(res.error) throw res.error;
+    return renderVendorPage();
+  }).then(function(){
+    hideLoader();
+    closeModal('modalVendor');
+    showToast(editId?'Vendeur modifié':'Vendeur ajouté');
+  }).catch(function(e){hideLoader();showToast('Erreur: '+(e.message||JSON.stringify(e)));console.error(e);});
+}
+
+function deleteVendor(id) {
+  if(!confirm('Supprimer ce vendeur ? Il ne pourra plus se connecter.')) return;
+  showLoader('Suppression...');
+  sb.from('vendors').delete().eq('id',id).then(function(res){
+    if(res.error) throw res.error;
+    return renderVendorPage();
+  }).then(function(){
+    hideLoader();
+    showToast('Vendeur supprimé');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function saveAdminPin() {
+  var pin=document.getElementById('adminPinInput').value.trim();
+  if(!pin||pin.length<4) return showToast('Code PIN requis (4 à 6 chiffres)');
+  showLoader('Enregistrement...');
+  sb.from('app_settings').upsert({key:'admin_pin', value:pin}).then(function(res){
+    if(res.error) throw res.error;
+    APP.adminPin=pin;
+    hideLoader();
+    showToast('PIN administrateur mis à jour');
+  }).catch(function(e){hideLoader();showToast('Erreur: '+(e.message||JSON.stringify(e)));console.error(e);});
+}
+
+
+
 function openVehicleDocs(vehicleId) {
   var v=getVehicle(vehicleId); if(!v) return;
   document.getElementById('modalVehicleDocsTitle').textContent='Documents · '+v.immat;
@@ -2399,7 +2814,7 @@ function updateStorageBar() {
 // =============================================
 // INIT
 // =============================================
-var overlayIds=['modalNewResa','modalResaDetail','modalVehicle','modalVehicleDocs','modalVehicleHistory','modalArchive','modalSignature'];
+var overlayIds=['modalNewResa','modalResaDetail','modalVehicle','modalVehicleDocs','modalVehicleHistory','modalArchive','modalSignature','modalVendor'];
 for(var oi=0;oi<overlayIds.length;oi++) {
   (function(id){
     document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});
@@ -2409,11 +2824,13 @@ for(var oi=0;oi<overlayIds.length;oi++) {
 var savedUser=localStorage.getItem('daf_user');
 if(savedUser) {
   APP.user=savedUser;
+  APP.isAdmin=localStorage.getItem('daf_is_admin')==='1';
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('appHeader').style.display='block';
   document.getElementById('bottomNav').style.display='flex';
   document.getElementById('userChip').textContent=savedUser;
-  document.getElementById('resaVendeur').value=savedUser;
+  document.getElementById('resaVendeur').value=APP.isAdmin?'':savedUser;
+  applyAdminVisibility();
   loadAll();
   updateHeaderOffset();
 }
