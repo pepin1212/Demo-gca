@@ -158,6 +158,11 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .section-title { font-size: 11px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid var(--orange); }
 .divider { height: 1px; background: #CBD5E1; margin: 16px 0; }
 .info-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--gray-light); font-size: 13px; }
+.vehicle-indicators { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.vehicle-indicator { background: var(--light); border-radius: var(--radius-sm); padding: 8px 6px; text-align: center; }
+.vehicle-indicator-icon { font-size: 16px; margin-bottom: 2px; }
+.vehicle-indicator-value { font-size: 14px; font-weight: 700; color: var(--dark); }
+.vehicle-indicator-label { font-size: 10px; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
 .gauge-track { width: 100%; height: 8px; background: var(--gray-light); border-radius: 4px; overflow: hidden; }
 .gauge-fill { height: 100%; border-radius: 4px; transition: width 0.35s ease; }
 .info-label { color: var(--gray); font-size: 12px; }
@@ -576,7 +581,23 @@ var VEH_DOCS = ['Carte Grise', 'Certificat Homologation', 'Agrément ADR'];
 function uid() { return Date.now().toString(36) + Math.random().toString(36).substr(2,5); }
 function toDateStr(d) { var m=d.getMonth()+1,dd=d.getDate(); return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(dd<10?'0':'')+dd; }
 function formatDate(s) { if(!s) return ''; var p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+function formatDateTime(iso) {
+  if(!iso) return '';
+  var d=new Date(iso);
+  if(isNaN(d.getTime())) return iso;
+  var pad=function(n){return String(n).padStart(2,'0');};
+  return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()+' à '+pad(d.getHours())+':'+pad(d.getMinutes());
+}
 function slugify(s) { return s.toLowerCase().replace(/[^a-z0-9]/g,'_'); }
+
+// Normalise un champ document (ancien format string unique, ou nouveau format tableau {url,name}) en tableau
+function getDocFiles(record, key) {
+  var val=record[key];
+  if(!val) return [];
+  if(Array.isArray(val)) return val;
+  // Ancien format : une seule URL stockée directement + champ _name séparé
+  return [{url:val, name:record[key+'_name']||'document'}];
+}
 function esc(s) { if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function getVehicle(id) { for(var i=0;i<APP.vehicles.length;i++) if(APP.vehicles[i].id===id) return APP.vehicles[i]; return null; }
 function getResa(id) { for(var i=0;i<APP.reservations.length;i++) if(APP.reservations[i].id===id) return APP.reservations[i]; return null; }
@@ -892,7 +913,7 @@ function buildResaCard(r) {
   var docsHtml='';
   for(var k=0;k<RESA_DOCS.length;k++) {
     var key='doc_'+slugify(RESA_DOCS[k]);
-    docsHtml+='<span class="doc-chip '+(r[key]?'ok':'missing')+'">'+RESA_DOCS[k].split(' ')[0]+'</span>';
+    docsHtml+='<span class="doc-chip '+(getDocFiles(r,key).length>0?'ok':'missing')+'">'+RESA_DOCS[k].split(' ')[0]+'</span>';
   }
   var pd=(r.photos_depart||[]).length, pr=(r.photos_retour||[]).length, pdg=(r.photos_degradation||[]).length;
   docsHtml+='<span class="doc-chip '+(pd>0?'ok':'missing')+'">📷D('+pd+')</span>';
@@ -1010,7 +1031,17 @@ function saveResa() {
 
   var promise;
   if(editId) promise=sb.from('reservations').update(data).eq('id',editId);
-  else { data.photos_depart=[]; data.photos_retour=[]; data.photos_degradation=[]; promise=sb.from('reservations').insert(data).select(); }
+  else {
+    data.photos_depart=[]; data.photos_retour=[]; data.photos_degradation=[];
+    // Pré-remplissage des relevés de départ avec les derniers indicateurs connus du véhicule (modifiables ensuite)
+    var vehForResa=getVehicle(vehicleId);
+    if(vehForResa) {
+      if(vehForResa.kilometrage_actuel!=null) data.km_depart=vehForResa.kilometrage_actuel;
+      if(vehForResa.carburant_actuel!=null) data.carburant_depart=vehForResa.carburant_actuel;
+      if(vehForResa.adblue_actuel!=null) data.adblue_depart=vehForResa.adblue_actuel;
+    }
+    promise=sb.from('reservations').insert(data).select();
+  }
 
   promise.then(function(res){
     if(res.error) throw res.error;
@@ -1055,8 +1086,8 @@ function openResaDetail(id) {
   html+='<div class="divider"></div><div class="section-title">Documents</div>';
   for(var k=0;k<RESA_DOCS.length;k++) {
     var docKey='doc_'+slugify(RESA_DOCS[k]);
-    var hasDoc=!!r[docKey];
-    var docName=r[docKey+'_name']||RESA_DOCS[k];
+    var docFiles=getDocFiles(r, docKey);
+    var hasDoc=docFiles.length>0;
     var isPermis=(RESA_DOCS[k]==='Permis Chauffeur');
     var isAssurance=(RESA_DOCS[k]==='Assurance');
     var checkKey=isPermis?'permis_verifie':(isAssurance?'assurance_verifiee':null);
@@ -1066,16 +1097,19 @@ function openResaDetail(id) {
 
     html+='<div class="doc-row" style="flex-direction:column;align-items:stretch;gap:6px">';
     html+='<div style="display:flex;align-items:center;justify-content:space-between;width:100%">';
-    html+='<div class="doc-row-left"><span style="font-size:15px">'+(confirmed?'✅':'⬜')+'</span>'+displayLabel+'</div>';
+    html+='<div class="doc-row-left"><span style="font-size:15px">'+(confirmed?'✅':'⬜')+'</span>'+displayLabel+(docFiles.length>1?' ('+docFiles.length+')':'')+'</div>';
     html+='<div class="doc-row-actions">';
-    if(hasDoc) {
-      html+='<button class="btn btn-light btn-xs" onclick="downloadResaDoc(\''+id+'\',\''+docKey+'\')">↓</button>';
-      html+='<button class="btn btn-danger btn-xs" onclick="deleteResaDoc(\''+id+'\',\''+docKey+'\')">✕</button>';
-    } else {
-      html+='<label class="btn btn-primary btn-xs" for="upDoc_'+docKey+'_'+id+'">+ Fichier</label>';
-      html+='<input type="file" id="upDoc_'+docKey+'_'+id+'" accept=".pdf,.doc,.docx,image/*" onchange="uploadResaDoc(\''+id+'\',\''+docKey+'\',this)">';
-    }
+    html+='<label class="btn btn-primary btn-xs" for="upDoc_'+docKey+'_'+id+'">+ Fichier</label>';
+    html+='<input type="file" id="upDoc_'+docKey+'_'+id+'" accept=".pdf,.doc,.docx,image/*" onchange="uploadResaDoc(\''+id+'\',\''+docKey+'\',this)">';
     html+='</div></div>';
+    for(var fi=0;fi<docFiles.length;fi++) {
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0 4px 22px;font-size:12px;color:var(--gray)">';
+      html+='<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(docFiles[fi].name||'document')+'</span>';
+      html+='<div style="display:flex;gap:6px;flex-shrink:0">';
+      html+='<button class="btn btn-light btn-xs" onclick="downloadResaDoc(\''+id+'\',\''+docKey+'\','+fi+')">↓</button>';
+      html+='<button class="btn btn-danger btn-xs" onclick="deleteResaDoc(\''+id+'\',\''+docKey+'\','+fi+')">✕</button>';
+      html+='</div></div>';
+    }
     if(checkKey) {
       html+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray);cursor:pointer;padding-left:2px">';
       html+='<input type="checkbox" id="'+(isPermis?'permisCheck_':'assuranceCheck_')+id+'" '+(checkConfirmed?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:16px;height:16px">';
@@ -1102,6 +1136,13 @@ function openResaDetail(id) {
   if(r.km_depart!=null && r.km_retour!=null && r.km_retour>=r.km_depart) {
     html+='<div class="info-row"><span class="info-label">Distance parcourue</span><span class="info-value">'+(r.km_retour-r.km_depart).toLocaleString('fr-FR')+' km</span></div>';
   }
+
+  // Horaires
+  html+='<div class="divider"></div><div class="section-title">🕒 Horaires</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
+  html+='<div><label class="form-label">Heure de départ</label><input type="time" class="form-input" id="heureDepart_'+id+'" value="'+(r.heure_depart||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Heure de retour</label><input type="time" class="form-input" id="heureRetour_'+id+'" value="'+(r.heure_retour||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
+  html+='</div>';
 
   // Niveaux Carburant & AdBlue
   html+='<div class="divider"></div><div class="section-title">⛽ Carburant & AdBlue</div>';
@@ -1156,6 +1197,10 @@ function openResaDetail(id) {
 
   // Signatures — Départ
   html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Départ</div>';
+  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" id="sigLieuDepart_'+id+'" value="'+esc(r.signature_lieu_depart||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'depart\')"></div>';
+  if(r.signature_date_depart) {
+    html+='<div class="info-row"><span class="info-label">Date / heure de signature</span><span class="info-value">'+formatDateTime(r.signature_date_depart)+'</span></div>';
+  }
   html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
   html+='<span class="doc-chip '+(r.signature_depart?'ok':'missing')+'">'+(r.signature_depart?'✅':'⬜')+' Client</span>';
   html+='<span class="doc-chip '+(r.signature_vendeur_depart?'ok':'missing')+'">'+(r.signature_vendeur_depart?'✅':'⬜')+' Vendeur</span>';
@@ -1167,6 +1212,10 @@ function openResaDetail(id) {
 
   // Signatures — Retour
   html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Retour</div>';
+  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" id="sigLieuRetour_'+id+'" value="'+esc(r.signature_lieu_retour||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'retour\')"></div>';
+  if(r.signature_date_retour) {
+    html+='<div class="info-row"><span class="info-label">Date / heure de signature</span><span class="info-value">'+formatDateTime(r.signature_date_retour)+'</span></div>';
+  }
   html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
   html+='<span class="doc-chip '+(r.signature_retour?'ok':'missing')+'">'+(r.signature_retour?'✅':'⬜')+' Client</span>';
   html+='<span class="doc-chip '+(r.signature_vendeur_retour?'ok':'missing')+'">'+(r.signature_vendeur_retour?'✅':'⬜')+' Vendeur</span>';
@@ -1239,6 +1288,7 @@ function deleteResa(id) {
 // =============================================
 function uploadResaDoc(resaId, docKey, input) {
   var file=input.files[0]; if(!file) return;
+  var r=getResa(resaId); if(!r) return;
   showLoader('Upload document...');
   var reader=new FileReader();
   reader.onload=function(e) {
@@ -1247,9 +1297,11 @@ function uploadResaDoc(resaId, docKey, input) {
     uploadToStorage('daf-documents', path, base64).then(function(res){
       if(res.error) throw res.error;
       var url=getPublicUrl('daf-documents', path);
+      var files=getDocFiles(r, docKey).slice();
+      files.push({url:url, name:file.name});
       var update={};
-      update[docKey]=url;
-      update[docKey+'_name']=file.name;
+      update[docKey]=files;
+      update[docKey+'_name']=null; // ancien format devenu obsolète
       return sb.from('reservations').update(update).eq('id',resaId);
     }).then(function(res){
       if(res.error) throw res.error;
@@ -1263,12 +1315,13 @@ function uploadResaDoc(resaId, docKey, input) {
   reader.readAsDataURL(file);
 }
 
-function deleteResaDoc(resaId, docKey) {
-  if(!confirm('Supprimer ce document ?')) return;
+function deleteResaDoc(resaId, docKey, index) {
+  if(!confirm('Supprimer ce fichier ?')) return;
   var r=getResa(resaId); if(!r) return;
+  var files=getDocFiles(r, docKey).slice();
+  files.splice(index,1);
   var update={};
-  update[docKey]=null;
-  update[docKey+'_name']=null;
+  update[docKey]=files;
   showLoader('Suppression...');
   sb.from('reservations').update(update).eq('id',resaId).then(function(res){
     if(res.error) throw res.error;
@@ -1276,15 +1329,17 @@ function deleteResaDoc(resaId, docKey) {
   }).then(function(){
     hideLoader();
     openResaDetail(resaId);
-    showToast('Document supprimé');
+    showToast('Fichier supprimé');
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
-function downloadResaDoc(resaId, docKey) {
-  var r=getResa(resaId); if(!r||!r[docKey]) return;
+function downloadResaDoc(resaId, docKey, index) {
+  var r=getResa(resaId); if(!r) return;
+  var files=getDocFiles(r, docKey);
+  var file=files[index]; if(!file) return;
   var a=document.createElement('a');
-  a.href=r[docKey];
-  a.download=r[docKey+'_name']||'document';
+  a.href=file.url;
+  a.download=file.name||'document';
   a.target='_blank';
   a.click();
 }
@@ -1381,6 +1436,34 @@ function saveJaugeNiveau(resaId, field) {
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
+function saveSignatureLieu(resaId, type) {
+  var field=type==='depart'?'signature_lieu_depart':'signature_lieu_retour';
+  var inputId=type==='depart'?'sigLieuDepart_':'sigLieuRetour_';
+  var val=document.getElementById(inputId+resaId).value.trim()||null;
+  var data={}; data[field]=val;
+  showLoader('Enregistrement...');
+  sb.from('reservations').update(data).eq('id',resaId).then(function(res){
+    if(res.error) throw res.error;
+    return loadReservations();
+  }).then(function(){
+    hideLoader();
+    showToast('Lieu enregistré');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function saveHoraires(resaId) {
+  var heureDepart=document.getElementById('heureDepart_'+resaId).value||null;
+  var heureRetour=document.getElementById('heureRetour_'+resaId).value||null;
+  showLoader('Enregistrement...');
+  sb.from('reservations').update({heure_depart:heureDepart, heure_retour:heureRetour}).eq('id',resaId).then(function(res){
+    if(res.error) throw res.error;
+    return loadReservations();
+  }).then(function(){
+    hideLoader();
+    showToast('Horaires enregistrés');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
 function saveKilometrage(resaId) {
   var r=getResa(resaId); if(!r) return;
   var kmDepart=document.getElementById('kmDepart_'+resaId).value;
@@ -1452,10 +1535,26 @@ function saveSignature() {
   var dataUrl=sigPad.toDataURL('image/png');
   showLoader('Enregistrement de la signature...');
   var path='reservations/'+resaId+'/signature_'+who+'_'+type+'_'+Date.now()+'.png';
+
+  var r=getResa(resaId);
+  var now=new Date();
   uploadToStorage('daf-documents', path, dataUrl).then(function(res){
     if(res.error) throw res.error;
     var url=getPublicUrl('daf-documents', path);
     var update={}; update[field]=url;
+
+    // Horodatage automatique de la signature (date/heure)
+    var dateField=type==='depart'?'signature_date_depart':'signature_date_retour';
+    if(!r || !r[dateField]) update[dateField]=now.toISOString();
+
+    // Auto-renseigne l'heure de départ/retour si elle n'a pas encore été saisie
+    var heureField=type==='depart'?'heure_depart':'heure_retour';
+    if(!r || !r[heureField]) {
+      var hh=String(now.getHours()).padStart(2,'0');
+      var mm=String(now.getMinutes()).padStart(2,'0');
+      update[heureField]=hh+':'+mm;
+    }
+
     return sb.from('reservations').update(update).eq('id',resaId);
   }).then(function(res2){
     if(res2.error) throw res2.error;
@@ -1576,13 +1675,13 @@ function downloadAllDemoZip(resaId) {
   // Documents
   for(var k=0;k<RESA_DOCS.length;k++) {
     var docKey='doc_'+slugify(RESA_DOCS[k]);
-    if(r[docKey]) {
+    var docFilesZip=getDocFiles(r, docKey);
+    for(var dfi=0;dfi<docFilesZip.length;dfi++) {
       (function(url, name){
         promises.push(fetch(url).then(function(resp){return resp.blob();}).then(function(blob){
-          var ext=name.split('.').pop()||'pdf';
           zip.file('documents/'+name, blob);
         }).catch(function(){}));
-      })(r[docKey], r[docKey+'_name']||RESA_DOCS[k]+'.pdf');
+      })(docFilesZip[dfi].url, (dfi+1)+'_'+(docFilesZip[dfi].name||RESA_DOCS[k]+'.pdf'));
     }
   }
 
@@ -1644,7 +1743,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
   // Finalise le document : ajoute les annexes véhicule (départ), puis télécharge (mode 'save') ou retourne {blob, filename} (mode 'blob')
   function finishPdf(filename) {
     var basePromise;
-    if(type==='depart' && veh) basePromise=mergeVehicleDocAnnexes(doc, veh);
+    if(type==='depart') basePromise=mergeVehicleDocAnnexes(doc, veh, r);
     else basePromise=Promise.resolve(doc.output('arraybuffer'));
 
     return basePromise.then(function(finalBytes){
@@ -1768,83 +1867,112 @@ function genPdfConfirmation(resaId, type, outputMode) {
       drawBlock(margin, 'SIGNATURE CLIENT — '+(type==='depart'?'DÉPART':'RETOUR'), chauffeurNomComplet, clientImg);
       drawBlock(margin+colW+colGap, 'SIGNATURE VENDEUR — '+(type==='depart'?'DÉPART':'RETOUR'), vendeurNom, vendeurImg);
 
-      y+=blockH+6;
+      y+=blockH+3;
+
+      // Lieu et date/heure de signature
+      var sigLieu=type==='depart'?r.signature_lieu_depart:r.signature_lieu_retour;
+      var sigDate=type==='depart'?r.signature_date_depart:r.signature_date_retour;
+      if(sigLieu||sigDate) {
+        doc.setFont(undefined,'normal');
+        doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+        doc.setFontSize(8);
+        var sigInfoParts=[];
+        if(sigLieu) sigInfoParts.push('Fait à '+sigLieu);
+        if(sigDate) sigInfoParts.push('le '+formatDateTime(sigDate));
+        doc.text(sigInfoParts.join(', '), margin, y+3);
+        y+=6;
+      }
+
+      y+=3;
     });
   }
 
   if(heroImgData) {
-    var heroH=62;
+    var heroH=58;
+    var panelMinW=58; // largeur minimale du panneau titre/note (mm)
 
-    // Recadrage "cover" via canvas pour remplir le bandeau sans déformation ni lettrboxing
-    return cropImageCover(heroImgData, contentW, heroH).then(function(croppedImgData){
-      // Photo plein cadre, coins légèrement arrondis avec clip
-      try {
-        doc.saveGraphicsState();
-        var rPath=3;
-        roundedClip(doc, margin, y, contentW, heroH, rPath);
-        doc.addImage(croppedImgData,'JPEG',margin,y,contentW,heroH);
-        doc.restoreGraphicsState();
-      } catch(e){
-        try { doc.addImage(croppedImgData,'JPEG',margin,y,contentW,heroH); } catch(e2){}
-      }
+    var props;
+    try { props=doc.getImageProperties(heroImgData); } catch(e){ props={width:4,height:3}; }
+    var ratio=props.width/props.height;
+    var imgW=heroH*ratio;
+    // Si l'image est très large, on limite sa largeur pour garder de la place pour le panneau
+    var maxImgW=contentW-panelMinW;
+    if(imgW>maxImgW) imgW=maxImgW;
+    var panelW=contentW-imgW;
+    var panelX=margin+imgW;
 
-      // Dégradé sombre en bas de la photo pour la lisibilité du bandeau de titre
-      var gradH=22;
-      var gradSteps=24;
-      for(var g=0;g<gradSteps;g++) {
-        var gh=gradH/gradSteps;
-        var gy=y+heroH-gradH+g*gh;
-        var alpha=(g/gradSteps)*0.75;
-        doc.setFillColor(0,0,0);
-        try { doc.setGState(new window.jspdf.GState({opacity:alpha})); } catch(e){}
-        doc.rect(margin, gy, contentW, gh+0.3, 'F');
-      }
-      try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
+    // Photo entière (contain), coins arrondis à gauche
+    try {
+      doc.saveGraphicsState();
+      roundedClip(doc, margin, y, imgW, heroH, 3);
+      doc.setFillColor(245,247,250);
+      doc.rect(margin, y, imgW, heroH, 'F');
+      doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH);
+      doc.restoreGraphicsState();
+    } catch(e){
+      try { doc.addImage(heroImgData,'JPEG',margin,y,imgW,heroH); } catch(e2){}
+    }
 
-      // Liseré orange en bas du bandeau photo
-      doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
-      doc.rect(margin, y+heroH-1, contentW, 1, 'F');
+    // Panneau bleu (dégradé bleu -> bleu plus clair) avec titre et note
+    var steps=24;
+    for(var g=0;g<steps;g++) {
+      var t=g/(steps-1);
+      var col=[
+        Math.round(COL_BLUE[0]+(38-COL_BLUE[0])*t),
+        Math.round(COL_BLUE[1]+(74-COL_BLUE[1])*t),
+        Math.round(COL_BLUE[2]+(135-COL_BLUE[2])*t)
+      ];
+      doc.setFillColor(col[0],col[1],col[2]);
+      var segW=panelW/steps;
+      doc.rect(panelX+g*segW, y, segW+0.3, heroH, 'F');
+    }
 
-      // Modèle en gros et gras, sur la photo
-      doc.setFont(undefined,'bold');
-      doc.setTextColor(255,255,255);
-      doc.setFontSize(19);
-      doc.text(veh&&veh.modele?veh.modele:immat, margin+5, y+heroH-12.5);
+    // Liseré orange à la base du panneau
+    doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
+    doc.rect(panelX, y+heroH-1.2, panelW, 1.2, 'F');
 
-      // Sous-titre immatriculation
+    // Coins arrondis à droite : masque les angles extérieurs du panneau
+    doc.setFillColor(255,255,255);
+    var rr=3;
+    doc.rect(margin+contentW-rr, y, rr, rr, 'F');
+    doc.rect(margin+contentW-rr, y+heroH-rr, rr, rr, 'F');
+    doc.setFillColor(col[0],col[1],col[2]);
+    doc.roundedRect(margin+contentW-2*rr, y, 2*rr, heroH, rr, rr, 'F');
+    doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
+    doc.rect(panelX, y+heroH-1.2, panelW-rr, 1.2, 'F');
+
+    // Texte du panneau
+    var padX=panelX+5;
+    var maxTextW=panelW-8;
+    doc.setFont(undefined,'bold');
+    doc.setTextColor(255,255,255);
+    var modeleText=veh&&veh.modele?veh.modele:immat;
+    var titleSize=panelW<70?13:15;
+    doc.setFontSize(titleSize);
+    var titleLines=doc.splitTextToSize(modeleText, maxTextW);
+    var textY=y+10;
+    doc.text(titleLines, padX, textY);
+    textY+=titleLines.length*(titleSize*0.42)+2;
+
+    doc.setFont(undefined,'normal');
+    doc.setFontSize(8);
+    try { doc.setGState(new window.jspdf.GState({opacity:0.85})); } catch(e){}
+    doc.text('Véhicule de démonstration', padX, textY);
+    doc.text(immat, padX, textY+4);
+    try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
+    textY+=10;
+
+    if(veh && veh.note_commerciale) {
       doc.setFont(undefined,'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(255,255,255);
-      try { doc.setGState(new window.jspdf.GState({opacity:0.85})); } catch(e){}
-      doc.text('Véhicule de démonstration · '+immat, margin+5, y+heroH-6.5);
-      try { doc.setGState(new window.jspdf.GState({opacity:1})); } catch(e){}
+      doc.setFontSize(8);
+      var availH=heroH-(textY-y)-3;
+      var maxLines=Math.max(1,Math.floor(availH/3.6));
+      var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, maxTextW);
+      if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
+      doc.text(heroNoteLines, padX, textY);
+    }
 
-      y+=heroH+6;
-
-      // Carte note commerciale, sous la photo
-      if(veh && veh.note_commerciale) {
-        doc.setFont(undefined,'normal');
-        doc.setFontSize(9.5);
-        var heroNoteLines=doc.splitTextToSize(veh.note_commerciale, contentW-10);
-        var maxLines=3;
-        if(heroNoteLines.length>maxLines) heroNoteLines=heroNoteLines.slice(0,maxLines);
-        var noteBoxH=heroNoteLines.length*4.6+8;
-
-        doc.setFillColor(COL_LIGHT_BG[0],COL_LIGHT_BG[1],COL_LIGHT_BG[2]);
-        doc.rect(margin, y, contentW, noteBoxH, 'F');
-        doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
-        doc.rect(margin, y, 1.5, noteBoxH, 'F');
-
-        doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
-        doc.text(heroNoteLines, margin+5, y+5.5);
-
-        y+=noteBoxH+8;
-      } else {
-        y+=2;
-      }
-
-      return continueGenPdf();
-    });
+    y+=heroH+8;
   }
 
   return continueGenPdf();
@@ -1892,11 +2020,11 @@ function genPdfConfirmation(resaId, type, outputMode) {
   fieldLine('MODÈLE', veh&&veh.modele?veh.modele:'—', y, contentW/2);
   y+=10;
   if(type==='depart') {
-    fieldLine('DATE DE DÉPART', formatDate(r.date_start), y, 0);
+    fieldLine('DATE DE DÉPART', formatDate(r.date_start)+(r.heure_depart?' à '+r.heure_depart:''), y, 0);
     fieldLine('RETOUR PRÉVU LE', formatDate(r.date_end), y, contentW/2);
   } else {
-    fieldLine('DATE DE RETOUR', formatDate(r.date_end), y, 0);
-    fieldLine('DÉPART LE', formatDate(r.date_start), y, contentW/2);
+    fieldLine('DATE DE RETOUR', formatDate(r.date_end)+(r.heure_retour?' à '+r.heure_retour:''), y, 0);
+    fieldLine('DÉPART LE', formatDate(r.date_start)+(r.heure_depart?' à '+r.heure_depart:''), y, contentW/2);
   }
   y+=11;
 
@@ -1946,15 +2074,15 @@ function genPdfConfirmation(resaId, type, outputMode) {
     var halfW=(contentW-8)/2;
 
     if(type==='depart') {
-      drawGauge('⛽ CARBURANT — DÉPART', r.carburant_depart, margin, y, halfW, COL_FUEL);
-      drawGauge('💧 ADBLUE — DÉPART', r.adblue_depart, margin+halfW+8, y, halfW, COL_ADBLUE);
+      drawGauge('CARBURANT — DÉPART', r.carburant_depart, margin, y, halfW, COL_FUEL);
+      drawGauge('ADBLUE — DÉPART', r.adblue_depart, margin+halfW+8, y, halfW, COL_ADBLUE);
       y+=12;
     } else {
-      drawGauge('⛽ CARBURANT — DÉPART', r.carburant_depart, margin, y, halfW, COL_FUEL);
-      drawGauge('💧 ADBLUE — DÉPART', r.adblue_depart, margin+halfW+8, y, halfW, COL_ADBLUE);
+      drawGauge('CARBURANT — DÉPART', r.carburant_depart, margin, y, halfW, COL_FUEL);
+      drawGauge('ADBLUE — DÉPART', r.adblue_depart, margin+halfW+8, y, halfW, COL_ADBLUE);
       y+=12;
-      drawGauge('⛽ CARBURANT — RETOUR', r.carburant_retour, margin, y, halfW, COL_FUEL);
-      drawGauge('💧 ADBLUE — RETOUR', r.adblue_retour, margin+halfW+8, y, halfW, COL_ADBLUE);
+      drawGauge('CARBURANT — RETOUR', r.carburant_retour, margin, y, halfW, COL_FUEL);
+      drawGauge('ADBLUE — RETOUR', r.adblue_retour, margin+halfW+8, y, halfW, COL_ADBLUE);
       y+=12;
     }
   }
@@ -2007,7 +2135,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
   y=sectionBox(docLabel, y);
   for(var k=0;k<docList.length;k++) {
     var item=docList[k];
-    var hasDoc = item.source==='vehicle' ? (veh&&!!veh[item.key]) : !!r[item.key];
+    var hasDoc = item.source==='vehicle' ? (veh&&getDocFiles(veh,item.key).length>0) : getDocFiles(r,item.key).length>0;
     if(y>pageH-25) { doc.addPage(); y=margin; }
     checkbox(item.label, hasDoc, 0, y);
     y+=6;
@@ -2086,7 +2214,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
       // Rapport conso si retour
       if(type==='retour') {
         var docKey='doc_'+slugify('Rapport Conso');
-        if(r[docKey]) {
+        if(getDocFiles(r, docKey).length>0) {
           doc.addPage();
           y=margin;
           y=sectionBox('RAPPORT DE CONSOMMATION', y);
@@ -2111,7 +2239,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
           doc.setFont(undefined,'bold');
           doc.setTextColor(255,255,255);
           doc.setFontSize(11);
-          doc.text('⚠ DÉGÂTS VISIBLES CONSTATÉS', margin+4, y+7);
+          doc.text('DÉGÂTS VISIBLES CONSTATÉS', margin+4, y+7);
           y+=15;
 
           var loadDegPromises=pdg.map(function(item){
@@ -2241,18 +2369,36 @@ function genPdfConfirmation(resaId, type, outputMode) {
 }
 
 // Fusionne le PDF principal (jsPDF) avec les documents véhicule (carte grise, certificat homologation, agrément ADR)
-// en pages annexes, via pdf-lib. Retourne une Promise<Uint8Array> (bytes du PDF final).
-function mergeVehicleDocAnnexes(mainDoc, veh) {
+// et les documents réservation (contrat de prêt, mémo assurance, permis chauffeur), en pages annexes, via pdf-lib.
+// Retourne une Promise<Uint8Array> (bytes du PDF final).
+function mergeVehicleDocAnnexes(mainDoc, veh, r) {
   var mainBytes=mainDoc.output('arraybuffer');
   var PDFLib=window.PDFLib;
   if(!PDFLib) return Promise.resolve(mainBytes);
 
-  var annexDocs=[
-    {label:'Carte Grise', key:'doc_carte_grise'},
-    {label:'Certificat Homologation', key:'doc_certificat_homologation'},
-    {label:'Agrément ADR', key:'doc_agr_ment_adr'}
-  ];
-  var toFetch=annexDocs.filter(function(a){return !!veh[a.key];});
+  var toFetch=[];
+  if(veh) {
+    var vehAnnexDocs=[
+      {label:'Carte Grise', source:veh, key:'doc_carte_grise'},
+      {label:'Certificat Homologation', source:veh, key:'doc_certificat_homologation'},
+      {label:'Agrément ADR', source:veh, key:'doc_agr_ment_adr'}
+    ];
+    vehAnnexDocs.forEach(function(a){
+      var files=getDocFiles(a.source, a.key);
+      files.forEach(function(f){ toFetch.push({label:a.label, url:f.url, name:f.name}); });
+    });
+  }
+  if(r) {
+    var resaAnnexDocs=[
+      {label:'Contrat de Prêt', source:r, key:'doc_contrat_de_pr_t'},
+      {label:'Mémo Assurance', source:r, key:'doc_assurance'},
+      {label:'Permis de Conduire', source:r, key:'doc_permis_chauffeur'}
+    ];
+    resaAnnexDocs.forEach(function(a){
+      var files=getDocFiles(a.source, a.key);
+      files.forEach(function(f){ toFetch.push({label:a.label, url:f.url, name:f.name}); });
+    });
+  }
 
   if(toFetch.length===0) return Promise.resolve(mainBytes);
 
@@ -2260,8 +2406,8 @@ function mergeVehicleDocAnnexes(mainDoc, veh) {
     var chain=Promise.resolve();
     toFetch.forEach(function(a){
       chain=chain.then(function(){
-        return fetch(veh[a.key]).then(function(resp){return resp.arrayBuffer();}).then(function(bytes){
-          return appendAnnexToPdf(finalPdf, bytes, a.label, veh[a.key+'_name']||'');
+        return fetch(a.url).then(function(resp){return resp.arrayBuffer();}).then(function(bytes){
+          return appendAnnexToPdf(finalPdf, bytes, a.label, a.name||'');
         }).catch(function(e){console.error('Annexe '+a.label+' ignorée:',e);});
       });
     });
@@ -2274,17 +2420,9 @@ function mergeVehicleDocAnnexes(mainDoc, veh) {
   });
 }
 
-// Ajoute un document (PDF ou image) comme page(s) annexe(s) dans finalPdf, précédé d'une page de séparation titrée
+// Ajoute un document (PDF ou image) comme page(s) annexe(s) dans finalPdf, en pleine page sans page de titre
 function appendAnnexToPdf(finalPdf, bytes, label, filename) {
   var PDFLib=window.PDFLib;
-  // Page de séparation
-  var sepPage=finalPdf.addPage([595.28, 841.89]); // A4 en points
-  sepPage.drawRectangle({x:0, y:0, width:595.28, height:841.89, color:PDFLib.rgb(1,1,1)});
-  sepPage.drawRectangle({x:0, y:760, width:595.28, height:81.89, color:PDFLib.rgb(0,48/255,135/255)});
-  sepPage.drawRectangle({x:0, y:756, width:595.28, height:3.4, color:PDFLib.rgb(232/255,96/255,28/255)});
-  sepPage.drawText('ANNEXE — DOCUMENT VÉHICULE', {x:51, y:800, size:18, color:PDFLib.rgb(1,1,1)});
-  sepPage.drawText(label, {x:51, y:680, size:22, color:PDFLib.rgb(0,48/255,135/255)});
-
   var ext=(filename.split('.').pop()||'').toLowerCase();
   var isPdf=ext==='pdf'||looksLikePdf(bytes);
 
@@ -2297,14 +2435,16 @@ function appendAnnexToPdf(finalPdf, bytes, label, filename) {
       console.error('Erreur insertion PDF annexe '+label+':', e);
     });
   } else {
-    // Image (jpg/png) : page A4 avec l'image centrée, ratio préservé
+    // Image (jpg/png) : page pleine, marges minimales pour impression
     var embedPromise=ext==='png'?finalPdf.embedPng(bytes):finalPdf.embedJpg(bytes);
     return embedPromise.then(function(img){
-      var page=finalPdf.addPage([595.28, 841.89]);
-      var maxW=595.28-80, maxH=841.89-160;
-      var ratio=Math.min(maxW/img.width, maxH/img.height, 1);
+      var pageW=595.28, pageH=841.89;
+      var margin=8;
+      var page=finalPdf.addPage([pageW, pageH]);
+      var maxW=pageW-2*margin, maxH=pageH-2*margin;
+      var ratio=Math.min(maxW/img.width, maxH/img.height);
       var w=img.width*ratio, h=img.height*ratio;
-      page.drawImage(img, {x:(595.28-w)/2, y:(841.89-h)/2, width:w, height:h});
+      page.drawImage(img, {x:(pageW-w)/2, y:(pageH-h)/2, width:w, height:h});
     }).catch(function(e){
       console.error('Erreur insertion image annexe '+label+':', e);
     });
@@ -2402,16 +2542,19 @@ function renderDocsList() {
     if(APP.docsFilter==='all'||APP.docsFilter==='contrat'||APP.docsFilter==='etat') {
       for(var k=0;k<RESA_DOCS.length;k++) {
         var docKey='doc_'+slugify(RESA_DOCS[k]);
-        if(!r[docKey]) continue;
+        var docFilesList=getDocFiles(r, docKey);
+        if(docFilesList.length===0) continue;
         if(APP.docsFilter==='contrat' && !RESA_DOCS[k].toLowerCase().includes('contrat')) continue;
         if(APP.docsFilter==='etat' && !RESA_DOCS[k].toLowerCase().includes('état')) continue;
         var label=RESA_DOCS[k]+' · '+immat+' · '+r.vendeur+' · '+formatDate(r.date_start);
         if(search && !label.toLowerCase().includes(search)) continue;
-        html+='<div class="doc-row">'+
-          '<div class="doc-row-left" style="flex:1;flex-direction:column;align-items:flex-start;gap:2px">'+
-          '<span style="font-size:12px;font-weight:700">'+RESA_DOCS[k]+'</span>'+
-          '<span style="font-size:10px;color:var(--gray)">'+esc(immat)+' · '+esc(r.vendeur)+' · '+formatDate(r.date_start)+'</span></div>'+
-          '<button class="btn btn-primary btn-xs" onclick="downloadResaDoc(\''+r.id+'\',\''+docKey+'\')">↓ Télécharger</button></div>';
+        for(var dli=0;dli<docFilesList.length;dli++) {
+          html+='<div class="doc-row">'+
+            '<div class="doc-row-left" style="flex:1;flex-direction:column;align-items:flex-start;gap:2px">'+
+            '<span style="font-size:12px;font-weight:700">'+RESA_DOCS[k]+(docFilesList.length>1?' ('+(dli+1)+'/'+docFilesList.length+')':'')+'</span>'+
+            '<span style="font-size:10px;color:var(--gray)">'+esc(immat)+' · '+esc(r.vendeur)+' · '+formatDate(r.date_start)+'</span></div>'+
+            '<button class="btn btn-primary btn-xs" onclick="downloadResaDoc(\''+r.id+'\',\''+docKey+'\','+dli+')">↓ Télécharger</button></div>';
+        }
       }
     }
 
@@ -2437,14 +2580,17 @@ function renderDocsList() {
       var v=APP.vehicles[vi];
       for(var k=0;k<VEH_DOCS.length;k++) {
         var vkey='doc_'+slugify(VEH_DOCS[k]);
-        if(!v[vkey]) continue;
+        var vehDocFilesList=getDocFiles(v, vkey);
+        if(vehDocFilesList.length===0) continue;
         var label3=VEH_DOCS[k]+' · '+v.immat;
         if(search && !label3.toLowerCase().includes(search)) continue;
-        html+='<div class="doc-row">'+
-          '<div class="doc-row-left" style="flex:1;flex-direction:column;align-items:flex-start;gap:2px">'+
-          '<span style="font-size:12px;font-weight:700">'+VEH_DOCS[k]+'</span>'+
-          '<span style="font-size:10px;color:var(--gray)">'+esc(v.immat)+' (permanent)</span></div>'+
-          '<button class="btn btn-primary btn-xs" onclick="downloadVehicleDoc(\''+v.id+'\',\''+vkey+'\')">↓ Télécharger</button></div>';
+        for(var vdi=0;vdi<vehDocFilesList.length;vdi++) {
+          html+='<div class="doc-row">'+
+            '<div class="doc-row-left" style="flex:1;flex-direction:column;align-items:flex-start;gap:2px">'+
+            '<span style="font-size:12px;font-weight:700">'+VEH_DOCS[k]+(vehDocFilesList.length>1?' ('+(vdi+1)+'/'+vehDocFilesList.length+')':'')+'</span>'+
+            '<span style="font-size:10px;color:var(--gray)">'+esc(v.immat)+' (permanent)</span></div>'+
+            '<button class="btn btn-primary btn-xs" onclick="downloadVehicleDoc(\''+v.id+'\',\''+vkey+'\','+vdi+')">↓ Télécharger</button></div>';
+        }
       }
     }
   }
@@ -2587,14 +2733,22 @@ function renderVehicleList() {
     var docsHtml='';
     for(var k=0;k<VEH_DOCS.length;k++) {
       var vkey='doc_'+slugify(VEH_DOCS[k]);
-      docsHtml+='<span class="doc-chip '+(v[vkey]?'ok':'missing')+'">'+VEH_DOCS[k]+'</span>';
+      docsHtml+='<span class="doc-chip '+(getDocFiles(v,vkey).length>0?'ok':'missing')+'">'+VEH_DOCS[k]+'</span>';
     }
 
     var infoHtml='';
     if(v.modele) infoHtml+='<div class="info-row"><span class="info-label">Modèle</span><span class="info-value">'+esc(v.modele)+'</span></div>';
-    if(v.kilometrage_actuel) infoHtml+='<div class="info-row"><span class="info-label">Kilométrage</span><span class="info-value">'+v.kilometrage_actuel.toLocaleString('fr-FR')+' km</span></div>';
-    if(v.carburant_actuel!=null) infoHtml+='<div class="info-row"><span class="info-label">⛽ Carburant</span><span class="info-value">'+v.carburant_actuel+'%</span></div>';
-    if(v.adblue_actuel!=null) infoHtml+='<div class="info-row"><span class="info-label">💧 AdBlue</span><span class="info-value">'+v.adblue_actuel+'%</span></div>';
+
+    // Indicateurs synchronisés avec le dernier retour de prêt
+    var kmDisplay=(v.kilometrage_actuel!=null)?v.kilometrage_actuel.toLocaleString('fr-FR')+' km':'-';
+    var carbDisplay=(v.carburant_actuel!=null)?v.carburant_actuel+'%':'-';
+    var adblueDisplay=(v.adblue_actuel!=null)?v.adblue_actuel+'%':'-';
+    var indicatorsHtml='<div class="vehicle-indicators">'+
+      '<div class="vehicle-indicator"><div class="vehicle-indicator-icon">🔢</div><div class="vehicle-indicator-value">'+kmDisplay+'</div><div class="vehicle-indicator-label">Kilométrage</div></div>'+
+      '<div class="vehicle-indicator"><div class="vehicle-indicator-icon">⛽</div><div class="vehicle-indicator-value">'+carbDisplay+'</div><div class="vehicle-indicator-label">Carburant</div></div>'+
+      '<div class="vehicle-indicator"><div class="vehicle-indicator-icon">💧</div><div class="vehicle-indicator-value">'+adblueDisplay+'</div><div class="vehicle-indicator-label">AdBlue</div></div>'+
+      '</div>';
+
     if(v.date_controle_technique) infoHtml+='<div class="info-row"><span class="info-label">Contrôle technique</span><span class="info-value">'+formatDate(v.date_controle_technique)+'</span></div>';
     if(v.date_chronotachygraphe) infoHtml+='<div class="info-row"><span class="info-label">Chronotachygraphe</span><span class="info-value">'+formatDate(v.date_chronotachygraphe)+'</span></div>';
     if(v.date_revision) infoHtml+='<div class="info-row"><span class="info-label">Révision</span><span class="info-value">'+formatDate(v.date_revision)+'</span></div>';
@@ -2616,6 +2770,7 @@ function renderVehicleList() {
       '<button class="btn btn-light btn-sm" onclick="openVehicleDocs(\''+v.id+'\')">📄 Docs</button>'+
       '<button class="btn btn-light btn-sm" onclick="editVehicle(\''+v.id+'\')">✏️</button></div></div>'+
       '<div class="card-body">'+
+      indicatorsHtml+
       infoHtml+
       '<div class="docs-chips" style="margin-top:8px">'+docsHtml+'</div>'+
       atelierHtml+
@@ -2860,18 +3015,24 @@ function openVehicleDocs(vehicleId) {
   var html='';
   for(var k=0;k<VEH_DOCS.length;k++) {
     var vkey='doc_'+slugify(VEH_DOCS[k]);
-    var hasDoc=!!v[vkey];
-    html+='<div class="doc-row">'+
-      '<div class="doc-row-left"><span style="font-size:15px">'+(hasDoc?'✅':'⬜')+'</span>'+VEH_DOCS[k]+'</div>'+
-      '<div class="doc-row-actions">';
-    if(hasDoc) {
-      html+='<button class="btn btn-light btn-xs" onclick="downloadVehicleDoc(\''+vehicleId+'\',\''+vkey+'\')">↓</button>';
-      html+='<button class="btn btn-danger btn-xs" onclick="deleteVehicleDoc(\''+vehicleId+'\',\''+vkey+'\')">✕</button>';
-    } else {
-      html+='<label class="btn btn-primary btn-xs" for="upVehDoc_'+vkey+'_'+vehicleId+'">+ PDF</label>';
-      html+='<input type="file" id="upVehDoc_'+vkey+'_'+vehicleId+'" accept=".pdf,image/*" onchange="uploadVehicleDoc(\''+vehicleId+'\',\''+vkey+'\',this)">';
+    var docFiles=getDocFiles(v, vkey);
+    var hasDoc=docFiles.length>0;
+    html+='<div class="doc-row" style="flex-direction:column;align-items:stretch;gap:6px">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;width:100%">'+
+      '<div class="doc-row-left"><span style="font-size:15px">'+(hasDoc?'✅':'⬜')+'</span>'+VEH_DOCS[k]+(docFiles.length>1?' ('+docFiles.length+')':'')+'</div>'+
+      '<div class="doc-row-actions">'+
+      '<label class="btn btn-primary btn-xs" for="upVehDoc_'+vkey+'_'+vehicleId+'">+ Fichier</label>'+
+      '<input type="file" id="upVehDoc_'+vkey+'_'+vehicleId+'" accept=".pdf,image/*" onchange="uploadVehicleDoc(\''+vehicleId+'\',\''+vkey+'\',this)">'+
+      '</div></div>';
+    for(var fi=0;fi<docFiles.length;fi++) {
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0 4px 22px;font-size:12px;color:var(--gray)">'+
+        '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(docFiles[fi].name||'document')+'</span>'+
+        '<div style="display:flex;gap:6px;flex-shrink:0">'+
+        '<button class="btn btn-light btn-xs" onclick="downloadVehicleDoc(\''+vehicleId+'\',\''+vkey+'\','+fi+')">↓</button>'+
+        '<button class="btn btn-danger btn-xs" onclick="deleteVehicleDoc(\''+vehicleId+'\',\''+vkey+'\','+fi+')">✕</button>'+
+        '</div></div>';
     }
-    html+='</div></div>';
+    html+='</div>';
   }
   document.getElementById('modalVehicleDocsBody').innerHTML=html;
   openModal('modalVehicleDocs');
@@ -2908,6 +3069,7 @@ function openVehicleHistory(vehicleId) {
 
 function uploadVehicleDoc(vehicleId, vkey, input) {
   var file=input.files[0]; if(!file) return;
+  var v=getVehicle(vehicleId); if(!v) return;
   showLoader('Upload...');
   var reader=new FileReader();
   reader.onload=function(e){
@@ -2916,7 +3078,9 @@ function uploadVehicleDoc(vehicleId, vkey, input) {
     uploadToStorage('daf-documents', path, base64).then(function(res){
       if(res.error) throw res.error;
       var url=getPublicUrl('daf-documents', path);
-      var update={}; update[vkey]=url; update[vkey+'_name']=file.name;
+      var files=getDocFiles(v, vkey).slice();
+      files.push({url:url, name:file.name});
+      var update={}; update[vkey]=files; update[vkey+'_name']=null;
       return sb.from('vehicles').update(update).eq('id',vehicleId);
     }).then(function(res){
       if(res.error) throw res.error;
@@ -2931,9 +3095,12 @@ function uploadVehicleDoc(vehicleId, vkey, input) {
   reader.readAsDataURL(file);
 }
 
-function deleteVehicleDoc(vehicleId, vkey) {
-  if(!confirm('Supprimer ce document ?')) return;
-  var update={}; update[vkey]=null; update[vkey+'_name']=null;
+function deleteVehicleDoc(vehicleId, vkey, index) {
+  if(!confirm('Supprimer ce fichier ?')) return;
+  var v=getVehicle(vehicleId); if(!v) return;
+  var files=getDocFiles(v, vkey).slice();
+  files.splice(index,1);
+  var update={}; update[vkey]=files;
   showLoader('Suppression...');
   sb.from('vehicles').update(update).eq('id',vehicleId).then(function(res){
     if(res.error) throw res.error;
@@ -2942,14 +3109,16 @@ function deleteVehicleDoc(vehicleId, vkey) {
     hideLoader();
     openVehicleDocs(vehicleId);
     renderVehicleList();
-    showToast('Document supprimé');
+    showToast('Fichier supprimé');
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
-function downloadVehicleDoc(vehicleId, vkey) {
-  var v=getVehicle(vehicleId); if(!v||!v[vkey]) return;
+function downloadVehicleDoc(vehicleId, vkey, index) {
+  var v=getVehicle(vehicleId); if(!v) return;
+  var files=getDocFiles(v, vkey);
+  var file=files[index]; if(!file) return;
   var a=document.createElement('a');
-  a.href=v[vkey]; a.download=v[vkey+'_name']||'document.pdf'; a.target='_blank';
+  a.href=file.url; a.download=file.name||'document.pdf'; a.target='_blank';
   a.click();
 }
 
