@@ -1214,8 +1214,10 @@ function openResaDetail(id) {
       html+='</div></div>';
     }
     if(checkKey) {
-      html+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray);cursor:pointer;padding-left:2px">';
-      html+='<input type="checkbox" id="'+(isPermis?'permisCheck_':(isAssurance?'assuranceCheck_':'contratCheck_'))+id+'" '+(checkConfirmed?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:16px;height:16px">';
+      var cbId=(isPermis?'permisCheck_':(isAssurance?'assuranceCheck_':'contratCheck_'))+id;
+      var cbColor=checkConfirmed?'color:#065F46':'color:var(--gray)';
+      html+='<label id="lbl_'+cbId+'" style="display:flex;align-items:center;gap:8px;font-size:12px;'+cbColor+';cursor:pointer;padding-left:2px;transition:color 0.2s">';
+      html+='<input type="checkbox" id="'+cbId+'" '+(checkConfirmed?'checked':'')+' onchange="saveDriverInfo(\''+id+'\');updateCheckLabel(this)" style="width:16px;height:16px;accent-color:#10B981;cursor:pointer">';
       html+='Je confirme être en possession de ce document (sans le téléverser)</label>';
     }
     html+='</div>';
@@ -1788,6 +1790,11 @@ function saveSignature() {
     openResaDetail(resaId);
     showToast('Signature enregistrée');
   }).catch(function(e){hideLoader();showToast('Erreur: '+(e.message||JSON.stringify(e)));console.error(e);});
+}
+
+function updateCheckLabel(checkbox) {
+  var lbl=document.getElementById('lbl_'+checkbox.id);
+  if(lbl) lbl.style.color=checkbox.checked?'#065F46':'var(--gray)';
 }
 
 function saveDriverInfo(resaId) {
