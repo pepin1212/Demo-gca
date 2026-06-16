@@ -3265,7 +3265,7 @@ function openVehicleDocs(vehicleId) {
         '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(docFiles[fi].name||'document')+'</span>'+
         '<div style="display:flex;gap:6px;flex-shrink:0">'+
         '<button class="btn btn-light btn-xs" onclick="downloadVehicleDoc(\''+vehicleId+'\',\''+vkey+'\','+fi+')">↓</button>'+
-        '<button class="btn btn-danger btn-xs" onclick="deleteVehicleDoc(\''+vehicleId+'\',\''+vkey+'\','+fi+')">✕</button>'+
+        (APP.isAdmin?'<button class="btn btn-danger btn-xs" onclick="deleteVehicleDoc(\''+vehicleId+'\',\''+vkey+'\','+fi+')">✕</button>':'')+
         '</div></div>';
     }
     html+='</div>';
@@ -3332,21 +3332,23 @@ function uploadVehicleDoc(vehicleId, vkey, input) {
 }
 
 function deleteVehicleDoc(vehicleId, vkey, index) {
-  if(!confirm('Supprimer ce fichier ?')) return;
-  var v=getVehicle(vehicleId); if(!v) return;
-  var files=getDocFiles(v, vkey).slice();
-  files.splice(index,1);
-  var update={}; update[vkey]=files;
-  showLoader('Suppression...');
-  sb.from('vehicles').update(update).eq('id',vehicleId).then(function(res){
-    if(res.error) throw res.error;
-    return loadVehicles();
-  }).then(function(){
-    hideLoader();
-    openVehicleDocs(vehicleId);
-    renderVehicleList();
-    showToast('Fichier supprimé');
-  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+  requireAdminPin(function(){
+    if(!confirm('Supprimer ce fichier ?')) return;
+    var v=getVehicle(vehicleId); if(!v) return;
+    var files=getDocFiles(v, vkey).slice();
+    files.splice(index,1);
+    var update={}; update[vkey]=files;
+    showLoader('Suppression...');
+    sb.from('vehicles').update(update).eq('id',vehicleId).then(function(res){
+      if(res.error) throw res.error;
+      return loadVehicles();
+    }).then(function(){
+      hideLoader();
+      openVehicleDocs(vehicleId);
+      renderVehicleList();
+      showToast('Fichier supprimé');
+    }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+  });
 }
 
 function downloadVehicleDoc(vehicleId, vkey, index) {
