@@ -192,7 +192,7 @@ textarea.form-input { resize: vertical; min-height: 70px; }
 .tab-btn.active { background: white; color: var(--blue); box-shadow: var(--shadow); }
 
 /* CONFLICT WARNING */
-.conflict-warn { background: #FEF3C7; border: 1px solid #F59E0B; border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: #92400E; font-weight: 600; display: none; }
+.conflict-warn { border: 1px solid #F59E0B; border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 12px; font-size: 12px; font-weight: 600; display: none; line-height: 1.5; }
 
 /* FILE UPLOAD */
 .file-upload-area { border: 2px dashed var(--gray-light); border-radius: var(--radius-sm); padding: 14px; text-align: center; cursor: pointer; background: var(--light); transition: all 0.2s; }
@@ -1027,25 +1027,51 @@ function checkConflict() {
   var s=document.getElementById('resaStart').value, e=document.getElementById('resaEnd').value, editId=document.getElementById('editResaId').value;
   var warn=document.getElementById('conflictWarn');
   if(!s||!e||!APP.selectedVehicleId) { warn.style.display='none'; return false; }
-  var conflictMsgs=[];
+
+  var conflictMsgs=[];   // bloquants
+  var warningMsgs=[];    // non-bloquants (même jour)
+
   for(var i=0;i<APP.reservations.length;i++) {
     var r=APP.reservations[i];
     if(r.vehicle_id!==APP.selectedVehicleId) continue;
     if(editId&&r.id===editId) continue;
-    if(s<=r.date_end&&e>=r.date_start) {
-      var who=r.entreprise||r.vendeur||'inconnue';
-      // Préciser quelle date pose problème
-      if(s<=r.date_end&&s>=r.date_start) {
-        conflictMsgs.push('Chevauchement avec "'+who+'" (se termine le '+formatDate(r.date_end)+')');
+
+    var client=r.entreprise||'Client inconnu';
+    var agent=getVendeurDisplay(r.vendeur)||r.vendeur||'—';
+
+    // Même jour exact (retour = départ ou départ = retour) → avertissement uniquement
+    if(s===r.date_end) {
+      warningMsgs.push('⚠️ ATTENTION — RETOUR PRÉVU LE MÊME JOUR pour la réservation du client « '+client+' » de l\'agent « '+agent+' »');
+      continue;
+    }
+    if(e===r.date_start) {
+      warningMsgs.push('⚠️ ATTENTION — DÉPART PROGRAMMÉ LE MÊME JOUR pour la réservation du client « '+client+' » de l\'agent « '+agent+' »');
+      continue;
+    }
+
+    // Chevauchement réel (strictement) → conflit bloquant
+    if(s<r.date_end && e>r.date_start) {
+      if(s>=r.date_start) {
+        conflictMsgs.push('Chevauchement avec « '+client+' » / '+agent+' (se termine le '+formatDate(r.date_end)+')');
       } else {
-        conflictMsgs.push('Chevauchement avec "'+who+'" (commence le '+formatDate(r.date_start)+')');
+        conflictMsgs.push('Chevauchement avec « '+client+' » / '+agent+' (commence le '+formatDate(r.date_start)+')');
       }
     }
   }
+
   var hasConflict=conflictMsgs.length>0;
-  warn.innerHTML='⚠️ Conflit : '+conflictMsgs.join(' · ');
-  warn.style.display=hasConflict?'block':'none';
-  return hasConflict;
+  var allMsgs=[];
+  if(hasConflict) allMsgs.push('🚫 CONFLIT BLOQUANT : '+conflictMsgs.join(' · '));
+  if(warningMsgs.length>0) allMsgs.push(warningMsgs.join(' · '));
+
+  warn.innerHTML=allMsgs.join('<br>');
+  warn.style.display=allMsgs.length>0?'block':'none';
+  // Rouge si conflit bloquant, orange si simple avertissement
+  warn.style.background=hasConflict?'#FEE2E2':'#FFF7ED';
+  warn.style.color=hasConflict?'#991B1B':'#92400E';
+  warn.style.borderColor=hasConflict?'#F87171':'#FCD34D';
+
+  return hasConflict; // ne bloque que les vrais conflits
 }
 
 function saveResa() {
@@ -1061,7 +1087,7 @@ function saveResa() {
   if(!dateStart||!dateEnd) return showToast('Dates requises');
   if(dateEnd<dateStart) return showToast('Date de fin invalide');
   if(!vendeur) return showToast('Agent DAF Trucks requis');
-  if(checkConflict()) return showToast('Impossible d\'enregistrer : conflit de dates avec une réservation existante');
+  if(checkConflict()) return showToast('Enregistrement impossible : conflit de dates avec une autre réservation');
 
   showLoader('Enregistrement...');
   var data={vehicle_id:vehicleId,date_start:dateStart,date_end:dateEnd,vendeur:vendeur,entreprise:entreprise,note:note};
