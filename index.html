@@ -49,7 +49,7 @@ body { overflow-x: hidden; width: 100%; position: relative; font-family: -apple-
 .login-error { color: #ffcccc; font-size: 13px; margin-top: 8px; text-align: center; display: none; }
 
 /* HEADER */
-.app-header { background: var(--blue); color: white; padding: calc(var(--safe-top) + 12px) 16px 12px; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-lg); }
+.app-header { background: var(--blue); color: white; padding: calc(var(--safe-top) + 12px) 16px 12px; position: fixed; top: 0; left: 0; right: 0; z-index: 100; box-shadow: var(--shadow-lg); }
 .header-inner { display: flex; align-items: center; justify-content: space-between; }
 .header-logo { display: flex; align-items: center; gap: 10px; }
 .header-logo img { height: 36px; object-fit: contain; background: white; border-radius: 6px; padding: 3px 8px; }
@@ -75,16 +75,17 @@ body { overflow-x: hidden; width: 100%; position: relative; font-family: -apple-
 .nav-btn.active .nav-dot { opacity: 1; }
 
 /* PAGES */
-.page { display: none; padding: 14px; max-width: 100%; }
+.page { display: none; padding: calc(var(--header-h, 60px) + 14px) 14px 14px; max-width: 100%; }
 .page.active { display: block; }
 .page-title { font-size: 18px; font-weight: 800; color: var(--blue); }
-.page-header-sticky { position: sticky; top: var(--header-h, 0px); z-index: 50; background: var(--light); display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 10px 0; }
+.page-header-sticky { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 10px 0; }
 
 /* CARDS */
-.card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; margin-bottom: 12px; }
-.card-header { background: var(--blue); color: white; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 12px; }
+.card-header { background: var(--blue); color: white; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; border-radius: var(--radius) var(--radius) 0 0; }
 .card-header-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .card-header.orange { background: var(--orange); }
+.card-header:last-child { border-radius: var(--radius); }
 .card-title { font-size: 14px; font-weight: 700; }
 .card-sub { font-size: 11px; opacity: 0.8; margin-top: 2px; }
 .card-body { padding: 14px; }
@@ -3366,6 +3367,10 @@ function updateHeaderOffset() {
   if(!header) return;
   var h=header.offsetHeight;
   document.documentElement.style.setProperty('--header-h', h+'px');
+  var pages=document.querySelectorAll('.page');
+  for(var i=0;i<pages.length;i++) {
+    pages[i].style.paddingTop=(h+14)+'px';
+  }
 }
 window.addEventListener('resize', updateHeaderOffset);
 window.addEventListener('orientationchange', function(){ setTimeout(updateHeaderOffset, 200); });
