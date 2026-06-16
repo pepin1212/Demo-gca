@@ -553,6 +553,15 @@ input[type="file"] { display: none; }
 
 <div class="toast" id="toastEl"></div>
 
+<!-- Modal d'alerte centré avec bouton OK -->
+<div id="alertOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center;padding:24px">
+  <div style="background:white;border-radius:16px;padding:24px 20px 18px;max-width:340px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+    <div id="alertIcon" style="font-size:28px;text-align:center;margin-bottom:10px">⚠️</div>
+    <div id="alertMsg" style="font-size:14px;font-weight:600;color:#111827;text-align:center;line-height:1.5;margin-bottom:18px"></div>
+    <button onclick="closeAlert()" style="width:100%;padding:12px;background:#003087;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">OK</button>
+  </div>
+</div>
+
 <script>
 // =============================================
 // CONFIG SUPABASE
@@ -626,6 +635,16 @@ function getVendeurDisplay(vendeurName) {
   return vendeurName;
 }
 function getResaStatus(r) { var t=toDateStr(new Date()); if(r.date_end<t) return 'past'; if(r.date_start<=t) return 'active'; return 'upcoming'; }
+
+function showAlert(msg, icon) {
+  document.getElementById('alertMsg').textContent=msg;
+  document.getElementById('alertIcon').textContent=icon||'⚠️';
+  var overlay=document.getElementById('alertOverlay');
+  overlay.style.display='flex';
+}
+function closeAlert() {
+  document.getElementById('alertOverlay').style.display='none';
+}
 
 function showToast(msg) {
   var t=document.getElementById('toastEl');
@@ -1086,11 +1105,11 @@ function saveResa() {
   var note=document.getElementById('resaNote').value.trim();
   var editId=document.getElementById('editResaId').value;
 
-  if(!vehicleId) return showToast('Sélectionnez un véhicule');
-  if(!dateStart||!dateEnd) return showToast('Dates requises');
-  if(dateEnd<dateStart) return showToast('Date de fin invalide');
-  if(!vendeur) return showToast('Agent DAF Trucks requis');
-  if(checkConflict()) return showToast('Enregistrement impossible : conflit de dates avec une autre réservation');
+  if(!vehicleId) { showAlert('Veuillez sélectionner un véhicule.'); return; }
+  if(!dateStart||!dateEnd) { showAlert('Veuillez renseigner les dates de début et de fin.'); return; }
+  if(dateEnd<dateStart) { showAlert('La date de fin doit être postérieure à la date de début.'); return; }
+  if(!vendeur) { showAlert('Veuillez sélectionner un agent DAF Trucks.'); return; }
+  if(checkConflict()) { showAlert('Enregistrement impossible : conflit de dates avec une autre réservation existante.', '🚫'); return; }
 
   showLoader('Enregistrement...');
   var data={vehicle_id:vehicleId,date_start:dateStart,date_end:dateEnd,vendeur:vendeur,entreprise:entreprise,note:note};
@@ -1363,7 +1382,7 @@ function editResa(id) {
   var r=getResa(id);
   if(!r) return;
   if(!APP.isAdmin && r.vendeur!==APP.user) {
-    showToast('Modification réservée à l\'agent DAF Trucks propriétaire ou à l\'administrateur');
+    showAlert('Modification réservée à l\'agent DAF Trucks propriétaire ou à l\'administrateur.', '🔒');
     return;
   }
   closeModal('modalResaDetail');
@@ -1392,7 +1411,7 @@ function deleteResa(id) {
   // Ni admin, ni propriétaire de la réservation : PIN administrateur requis
   var pin=prompt('Cette réservation appartient à un autre agent DAF Trucks.\nEntrez le PIN administrateur pour la supprimer :');
   if(pin===null) return;
-  if(pin!==APP.adminPin) { showToast('PIN administrateur incorrect'); return; }
+  if(pin!==APP.adminPin) { showAlert('PIN administrateur incorrect.', '🔒'); return; }
   if(!confirm('Supprimer cette réservation ?')) return;
   doDeleteResa(id);
 }
@@ -1616,7 +1635,7 @@ function saveKilometrage(resaId) {
   kmRetour=kmRetour===''?null:parseInt(kmRetour);
 
   if(kmDepart!=null && kmRetour!=null && kmRetour<kmDepart) {
-    showToast('Le kilométrage retour doit être supérieur au départ');
+    showAlert('Le kilométrage retour doit être supérieur au kilométrage de départ.', '⚠️');
     return;
   }
 
@@ -1680,7 +1699,7 @@ function openSignaturePad(resaId, type, who) {
   // Vérification des champs obligatoires avant d'autoriser la signature
   var manquants=type==='depart'?checkDepartComplet(r):checkRetourComplet(r);
   if(manquants.length>0) {
-    showToast('Champs manquants avant de signer : '+manquants.join(', '));
+    showAlert('Champs manquants avant de signer : '+manquants.join(', '), '📝');
     return;
   }
   document.getElementById('sigResaId').value=resaId;
@@ -1709,7 +1728,7 @@ function clearSignature() {
 }
 
 function saveSignature() {
-  if(!sigPad || sigPad.isEmpty()) return showToast('Veuillez signer avant de valider');
+  if(!sigPad || sigPad.isEmpty()) { showAlert('Veuillez signer avant de valider.'); return; }
   var resaId=document.getElementById('sigResaId').value;
   var type=document.getElementById('sigType').value;
   var who=document.getElementById('sigWho').value||'client';
@@ -1838,7 +1857,7 @@ function downloadAllPhotos(resaId, type) {
   if(type==='depart'||type==='all') urls=urls.concat(r.photos_depart||[]);
   if(type==='retour'||type==='all') urls=urls.concat(r.photos_retour||[]);
   if(type==='degradation'||type==='all') urls=urls.concat((r.photos_degradation||[]).map(function(item){return item.url;}));
-  if(urls.length===0) return showToast('Aucune photo');
+  if(urls.length===0) { showAlert('Aucune photo à télécharger.'); return; }
   showLoader('Préparation ZIP...');
   var zip=new JSZip();
   var remaining=urls.length;
@@ -1987,11 +2006,11 @@ function genPdfDepart(resaId) {
   var hasPermis=!!r.permis_verifie || getDocFiles(r,'doc_'+slugify('Permis Chauffeur')).length>0;
   var hasAssurance=!!r.assurance_verifiee || getDocFiles(r,'doc_'+slugify('Assurance')).length>0;
   if(!hasPermis || !hasAssurance) {
-    showToast('Permis de conduire et Mémo assurance requis (téléversé ou coché) avant de générer le rapport de départ.');
+    showAlert('Le Permis de conduire et le Mémo assurance doivent être téléversés ou cochés avant de générer le rapport de départ.', '📋');
     return;
   }
   if(!r.signature_depart || !r.signature_vendeur_depart) {
-    showToast('Les deux signatures (client et agent DAF) sont requises pour générer le rapport de départ.');
+    showAlert('Les deux signatures (client et agent DAF Trucks) sont requises pour générer le rapport de départ.', '✍️');
     return;
   }
   genPdfConfirmation(resaId, 'depart');
@@ -2000,7 +2019,7 @@ function genPdfDepart(resaId) {
 function genPdfRetour(resaId) {
   var r=getResa(resaId); if(!r) return;
   if(!r.signature_retour || !r.signature_vendeur_retour) {
-    showToast('Les deux signatures (client et agent DAF) sont requises pour générer le rapport de retour.');
+    showAlert('Les deux signatures (client et agent DAF Trucks) sont requises pour générer le rapport de retour.', '✍️');
     return;
   }
   genPdfConfirmation(resaId, 'retour');
@@ -2966,9 +2985,9 @@ function openArchiveModal() {
 
 function doArchive() {
   var cutoff=document.getElementById('archiveDate').value;
-  if(!cutoff) return showToast('Choisissez une date');
+  if(!cutoff) { showAlert("Veuillez choisir une date avant d'archiver."); return; }
   var toArchive=APP.reservations.filter(function(r){return r.date_end<cutoff;});
-  if(toArchive.length===0) return showToast('Aucune réservation avant cette date');
+  if(toArchive.length===0) { showAlert('Aucune réservation terminée avant cette date.'); return; }
 
   showLoader('Génération du PDF d\'archive...');
   var jsPDF=window.jspdf.jsPDF;
@@ -3155,7 +3174,7 @@ function requireAdminPin(callback) {
   if(APP.isAdmin) { callback(); return; }
   var pin=prompt('Action réservée à l\'administrateur.\nEntrez le PIN administrateur :');
   if(pin===null) return;
-  if(pin!==APP.adminPin) { showToast('PIN administrateur incorrect'); return; }
+  if(pin!==APP.adminPin) { showAlert('PIN administrateur incorrect.', '🔒'); return; }
   callback();
 }
 
@@ -3210,12 +3229,12 @@ function editVehicle(id) {
 function saveVehicle() {
   var immat=document.getElementById('vehImmat').value.trim().toUpperCase();
   var editId=document.getElementById('editVehicleId').value;
-  if(!immat) return showToast('Immatriculation requise');
+  if(!immat) { showAlert("L'immatriculation est requise."); return; }
 
   var atelierDebut=document.getElementById('vehAtelierDebut').value;
   var atelierFin=document.getElementById('vehAtelierFin').value;
-  if((atelierDebut&&!atelierFin)||(!atelierDebut&&atelierFin)) return showToast('Renseignez début ET fin atelier');
-  if(atelierDebut&&atelierFin&&atelierFin<atelierDebut) return showToast('Date de fin atelier invalide');
+  if((atelierDebut&&!atelierFin)||(!atelierDebut&&atelierFin)) { showAlert("Veuillez renseigner les dates de début ET de fin d'immobilisation atelier."); return; }
+  if(atelierDebut&&atelierFin&&atelierFin<atelierDebut) { showAlert("La date de fin atelier doit être postérieure à la date de début."); return; }
 
   var data={
     immat:immat,
@@ -3335,9 +3354,9 @@ function saveVendor() {
   var nom=document.getElementById('vendorNom').value.trim();
   var pin=document.getElementById('vendorPin').value.trim();
   var editId=document.getElementById('editVendorId').value;
-  if(!prenom) return showToast('Prénom requis');
-  if(!nom) return showToast('Nom requis');
-  if(!pin||pin.length<4) return showToast('Code PIN requis (4 à 6 chiffres)');
+  if(!prenom) { showAlert('Le prénom est requis.'); return; }
+  if(!nom) { showAlert('Le nom est requis.'); return; }
+  if(!pin||pin.length<4) { showAlert('Le code PIN doit contenir entre 4 et 6 chiffres.'); return; }
 
   var data={prenom:prenom, nom:nom, pin:pin};
   showLoader('Enregistrement...');
@@ -3368,7 +3387,7 @@ function deleteVendor(id) {
 
 function saveAdminPin() {
   var pin=document.getElementById('adminPinInput').value.trim();
-  if(!pin||pin.length<4) return showToast('Code PIN requis (4 à 6 chiffres)');
+  if(!pin||pin.length<4) { showAlert('Le code PIN doit contenir entre 4 et 6 chiffres.'); return; }
   showLoader('Enregistrement...');
   sb.from('app_settings').upsert({key:'admin_pin', value:pin}).then(function(res){
     if(res.error) throw res.error;
