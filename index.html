@@ -1331,10 +1331,12 @@ function openResaDetail(id) {
   // Actions
   html+='<div class="divider"></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
-  var departSigned=!!(r.signature_depart||r.signature_vendeur_depart);
-  var retourSigned=!!(r.signature_retour||r.signature_vendeur_retour);
-  html+='<button class="btn btn-primary" onclick="genPdfDepart(\''+id+'\')">📄 Départ PDF'+(departSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
-  html+='<button class="btn btn-orange" onclick="genPdfRetour(\''+id+'\')">📄 Retour PDF'+(retourSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
+  var departSigned=!!(r.signature_depart && r.signature_vendeur_depart);
+  var retourSigned=!!(r.signature_retour && r.signature_vendeur_retour);
+  var departBtnStyle=departSigned?'':'opacity:0.5';
+  var retourBtnStyle=retourSigned?'':'opacity:0.5';
+  html+='<button class="btn btn-primary" style="'+departBtnStyle+'" onclick="genPdfDepart(\''+id+'\')">📄 Départ PDF'+(departSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
+  html+='<button class="btn btn-orange" style="'+retourBtnStyle+'" onclick="genPdfRetour(\''+id+'\')">📄 Retour PDF'+(retourSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
   html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'depart\')">📷 Départ</button>';
@@ -1640,8 +1642,47 @@ function saveKilometrage(resaId) {
 // =============================================
 var sigPad=null;
 
+// Vérifie que tous les champs obligatoires du DÉPART sont renseignés
+function checkDepartComplet(r) {
+  var manquants=[];
+  if(!r.chauffeur_nom) manquants.push('Nom chauffeur');
+  if(!r.chauffeur_prenom) manquants.push('Prénom chauffeur');
+  if(!r.chauffeur_telephone) manquants.push('Téléphone chauffeur');
+  if(r.km_depart==null||r.km_depart==='') manquants.push('Kilométrage départ');
+  if(!r.heure_depart) manquants.push('Heure de départ');
+  if(r.carburant_depart==null||r.carburant_depart==='') manquants.push('Carburant départ');
+  if(r.adblue_depart==null||r.adblue_depart==='') manquants.push('AdBlue départ');
+  if(!r.signature_lieu_depart) manquants.push('Lieu de signature départ');
+  return manquants;
+}
+
+// Vérifie que tous les champs obligatoires du RETOUR sont renseignés
+function checkRetourComplet(r) {
+  var manquants=[];
+  var chNom=(r.chauffeur_retour_nom!=null)?r.chauffeur_retour_nom:r.chauffeur_nom;
+  var chPrenom=(r.chauffeur_retour_prenom!=null)?r.chauffeur_retour_prenom:r.chauffeur_prenom;
+  var chTel=(r.chauffeur_retour_telephone!=null)?r.chauffeur_retour_telephone:r.chauffeur_telephone;
+  if(!chNom) manquants.push('Nom chauffeur retour');
+  if(!chPrenom) manquants.push('Prénom chauffeur retour');
+  if(!chTel) manquants.push('Téléphone chauffeur retour');
+  if(r.km_retour==null||r.km_retour==='') manquants.push('Kilométrage retour');
+  if(!r.heure_retour) manquants.push('Heure de retour');
+  if(r.carburant_retour==null||r.carburant_retour==='') manquants.push('Carburant retour');
+  if(r.adblue_retour==null||r.adblue_retour==='') manquants.push('AdBlue retour');
+  if(!r.signature_lieu_retour) manquants.push('Lieu de signature retour');
+  return manquants;
+}
+
 function openSignaturePad(resaId, type, who) {
   who=who||'client';
+  var r=getResa(resaId); if(!r) return;
+
+  // Vérification des champs obligatoires avant d'autoriser la signature
+  var manquants=type==='depart'?checkDepartComplet(r):checkRetourComplet(r);
+  if(manquants.length>0) {
+    showToast('Champs manquants avant de signer : '+manquants.join(', '));
+    return;
+  }
   document.getElementById('sigResaId').value=resaId;
   document.getElementById('sigType').value=type;
   document.getElementById('sigWho').value=who;
@@ -1946,12 +1987,24 @@ function genPdfDepart(resaId) {
   var hasPermis=!!r.permis_verifie || getDocFiles(r,'doc_'+slugify('Permis Chauffeur')).length>0;
   var hasAssurance=!!r.assurance_verifiee || getDocFiles(r,'doc_'+slugify('Assurance')).length>0;
   if(!hasPermis || !hasAssurance) {
-    showToast('Impossible de générer le rapport de départ : veuillez cocher ou téléverser le Permis de conduire et le Mémo assurance.');
+    showToast('Permis de conduire et Mémo assurance requis (téléversé ou coché) avant de générer le rapport de départ.');
+    return;
+  }
+  if(!r.signature_depart || !r.signature_vendeur_depart) {
+    showToast('Les deux signatures (client et agent DAF) sont requises pour générer le rapport de départ.');
     return;
   }
   genPdfConfirmation(resaId, 'depart');
 }
-function genPdfRetour(resaId) { genPdfConfirmation(resaId, 'retour'); }
+
+function genPdfRetour(resaId) {
+  var r=getResa(resaId); if(!r) return;
+  if(!r.signature_retour || !r.signature_vendeur_retour) {
+    showToast('Les deux signatures (client et agent DAF) sont requises pour générer le rapport de retour.');
+    return;
+  }
+  genPdfConfirmation(resaId, 'retour');
+}
 
 function genPdfConfirmation(resaId, type, outputMode) {
   outputMode=outputMode||'save';
