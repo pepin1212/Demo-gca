@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>GCA Marseille – DAF Trucks | Démo Fleet</title>
@@ -635,7 +635,10 @@ function showToast(msg) {
 function showLoader(txt) { document.getElementById('loaderText').textContent=txt||'Chargement...'; document.getElementById('loader').classList.add('show'); }
 function hideLoader() { document.getElementById('loader').classList.remove('show'); }
 function openModal(id) { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  if(id==='photoViewer') disableZoom();
+}
 
 // =============================================
 // LOGIN
@@ -1427,6 +1430,9 @@ function uploadResaDoc(resaId, docKey, input) {
       var update={};
       update[docKey]=files;
       update[docKey+'_name']=null; // ancien format devenu obsolète
+      // Auto-cocher la case de confirmation si on uploade le permis ou l'assurance
+      if(docKey===('doc_'+slugify('Permis Chauffeur'))) update.permis_verifie=true;
+      if(docKey===('doc_'+slugify('Assurance'))) update.assurance_verifiee=true;
       return sb.from('reservations').update(update).eq('id',resaId);
     }).then(function(res){
       if(res.error) throw res.error;
@@ -1767,9 +1773,19 @@ function updateDegradationNote(resaId, index, note) {
   }).catch(function(e){showToast('Erreur');console.error(e);});
 }
 
+function enableZoom() {
+  var vp=document.querySelector('meta[name="viewport"]');
+  if(vp) vp.setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
+}
+function disableZoom() {
+  var vp=document.querySelector('meta[name="viewport"]');
+  if(vp) vp.setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover');
+}
+
 function viewPhoto(src) {
   document.getElementById('photoViewerImg').src=src;
   openModal('photoViewer');
+  enableZoom();
 }
 
 // =============================================
@@ -1925,7 +1941,16 @@ function downloadZip(resaId, scope) {
 // =============================================
 // PDF CONFIRMATION DÉPART/RETOUR
 // =============================================
-function genPdfDepart(resaId) { genPdfConfirmation(resaId, 'depart'); }
+function genPdfDepart(resaId) {
+  var r=getResa(resaId); if(!r) return;
+  var hasPermis=!!r.permis_verifie || getDocFiles(r,'doc_'+slugify('Permis Chauffeur')).length>0;
+  var hasAssurance=!!r.assurance_verifiee || getDocFiles(r,'doc_'+slugify('Assurance')).length>0;
+  if(!hasPermis || !hasAssurance) {
+    showToast('Impossible de générer le rapport de départ : veuillez cocher ou téléverser le Permis de conduire et le Mémo assurance.');
+    return;
+  }
+  genPdfConfirmation(resaId, 'depart');
+}
 function genPdfRetour(resaId) { genPdfConfirmation(resaId, 'retour'); }
 
 function genPdfConfirmation(resaId, type, outputMode) {
@@ -2084,6 +2109,16 @@ function genPdfConfirmation(resaId, type, outputMode) {
       }
 
       y+=3;
+
+      // Mention légale sous les signatures
+      var disclaimer='PAR SA SIGNATURE, LE CLIENT RECONNAIT L\'EXACTITUDE DES INFORMATIONS MENTIONNÉES SUR CE DOCUMENT.';
+      doc.setFont(undefined,'bolditalic');
+      doc.setTextColor(220,38,38);
+      doc.setFontSize(7.5);
+      var disclaimerLines=doc.splitTextToSize(disclaimer, contentW);
+      if(y+disclaimerLines.length*4>pageH-margin) { doc.addPage(); y=margin; }
+      doc.text(disclaimerLines, margin, y+3);
+      y+=disclaimerLines.length*4+4;
     });
   }
 
@@ -2361,19 +2396,27 @@ function genPdfConfirmation(resaId, type, outputMode) {
   var docList = type==='depart'?DEPART_DOCS:RETOUR_DOCS;
   var docLabel = type==='depart'?'DOCUMENTS À REMETTRE AU DÉPART':'RÉCAPITULATIF DOCUMENTS';
 
-  // Hauteur totale du bloc (titre de section + une ligne par document) : si ça ne tient pas
-  // entièrement sur la page courante, on saute de page AVANT de commencer à dessiner le bloc.
-  var docBlockH = 12 + docList.length*6 + 5;
-  if(y+docBlockH>pageH-margin) { doc.addPage(); y=margin; }
+  // Calculer les états de chaque document
+  var docStates=docList.map(function(item){
+    var present=item.source==='vehicle'?(veh&&getDocFiles(veh,item.key).length>0):getDocFiles(r,item.key).length>0;
+    // Pour permis et assurance : coché manuellement compte aussi
+    if(!present && item.key===('doc_'+slugify('Permis Chauffeur'))) present=!!r.permis_verifie;
+    if(!present && item.key===('doc_'+slugify('Assurance'))) present=!!r.assurance_verifiee;
+    return {item:item, hasDoc:present};
+  });
 
-  y=sectionBox(docLabel, y);
-  for(var k=0;k<docList.length;k++) {
-    var item=docList[k];
-    var hasDoc = item.source==='vehicle' ? (veh&&getDocFiles(veh,item.key).length>0) : getDocFiles(r,item.key).length>0;
-    checkbox(item.label, hasDoc, 0, y);
-    y+=6;
+  // N'afficher le bloc que si au moins un document est présent ou coché
+  var anyDocPresent=docStates.some(function(d){return d.hasDoc;});
+  if(anyDocPresent) {
+    var docBlockH = 12 + docList.length*6 + 5;
+    if(y+docBlockH>pageH-margin) { doc.addPage(); y=margin; }
+    y=sectionBox(docLabel, y);
+    for(var k=0;k<docStates.length;k++) {
+      checkbox(docStates[k].item.label, docStates[k].hasDoc, 0, y);
+      y+=6;
+    }
+    y+=5;
   }
-  y+=5;
 
   // NOTE
   if(r.note) {
