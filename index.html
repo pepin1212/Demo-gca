@@ -1160,7 +1160,22 @@ function openResaDetail(id) {
   var html='';
   html+='<div class="section-title">Informations</div>';
   html+='<div class="info-row"><span class="info-label">Statut</span><span class="status-badge '+statusCls[status]+'">'+statusLabels[status]+'</span></div>';
-  html+='<div class="info-row"><span class="info-label">Véhicule</span><span class="info-value">'+esc(immat)+'</span></div>';
+
+  // Photo et modèle du véhicule
+  if(veh) {
+    var photoSrc=veh.photo_url||LOGO_B64;
+    var objFit=veh.photo_url?'cover':'contain';
+    html+='<div style="display:flex;align-items:center;gap:12px;margin:10px 0;background:var(--light);border-radius:var(--radius);padding:10px">';
+    html+='<img src="'+photoSrc+'" alt="" style="width:72px;height:72px;border-radius:var(--radius-sm);object-fit:'+objFit+';background:white;border:1px solid var(--gray-light);flex-shrink:0" onclick="viewPhoto(\''+photoSrc+'\')">';
+    html+='<div>';
+    html+='<div style="font-size:16px;font-weight:700;color:var(--blue)">'+esc(immat)+'</div>';
+    if(veh.modele) html+='<div style="font-size:13px;font-weight:600;color:var(--dark);margin-top:2px">'+esc(veh.modele)+'</div>';
+    if(veh.note_commerciale) html+='<div style="font-size:12px;color:var(--gray);margin-top:4px;line-height:1.4">'+esc(veh.note_commerciale)+'</div>';
+    html+='</div></div>';
+  } else {
+    html+='<div class="info-row"><span class="info-label">Véhicule</span><span class="info-value">'+esc(immat)+'</span></div>';
+  }
+
   html+='<div class="info-row"><span class="info-label">Agent DAF Trucks</span><span class="info-value">'+esc(r.vendeur)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Début</span><span class="info-value">'+formatDate(r.date_start)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Fin</span><span class="info-value">'+formatDate(r.date_end)+'</span></div>';
