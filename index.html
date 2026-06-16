@@ -556,11 +556,11 @@ input[type="file"] { display: none; }
 <div class="toast" id="toastEl"></div>
 
 <!-- Modal d'alerte centré avec bouton OK -->
-<div id="alertOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center;padding:24px">
-  <div style="background:white;border-radius:16px;padding:24px 20px 18px;max-width:340px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+<div id="alertOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:center;justify-content:center;padding:20px;box-sizing:border-box">
+  <div style="background:white;border-radius:16px;padding:24px 20px 18px;max-width:340px;width:100%;box-sizing:border-box;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
     <div id="alertIcon" style="font-size:28px;text-align:center;margin-bottom:10px">⚠️</div>
-    <div id="alertMsg" style="font-size:14px;font-weight:600;color:#111827;text-align:center;line-height:1.5;margin-bottom:18px"></div>
-    <button onclick="closeAlert()" style="width:100%;padding:12px;background:#003087;color:white;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">OK</button>
+    <div id="alertMsg" style="font-size:14px;font-weight:600;color:#111827;text-align:center;line-height:1.5;margin-bottom:18px;word-break:break-word;white-space:normal"></div>
+    <button onclick="closeAlert()" style="width:100%;padding:12px;background:#003087;color:white;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer">OK</button>
   </div>
 </div>
 
