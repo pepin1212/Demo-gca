@@ -336,7 +336,7 @@ input[type="file"] { display: none; }
 
 <div class="page" id="page-vendors">
   <div class="page-header-sticky">
-    <div class="page-title">Vendeurs</div>
+    <div class="page-title">Agents DAF Trucks</div>
     <button class="btn btn-orange btn-sm" onclick="openAddVendor()">+ Ajouter</button>
   </div>
   <div class="card" style="margin-bottom:12px">
@@ -368,7 +368,7 @@ input[type="file"] { display: none; }
   </button>
   <button class="nav-btn" onclick="showPage('vendors',this)" id="nav-vendors" style="display:none">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-    Vendeurs<div class="nav-dot"></div>
+    Agents DAF<div class="nav-dot"></div>
   </button>
 </div>
 
@@ -394,9 +394,9 @@ input[type="file"] { display: none; }
         </div>
       </div>
       <div class="form-section">
-        <div class="section-title">Vendeur & Client</div>
-        <div class="form-group" id="resaVendeurStaticWrap"><label class="form-label">Vendeur</label><div class="form-input" id="resaVendeurStatic" style="background:var(--gray-light);color:var(--dark);display:flex;align-items:center"></div></div>
-        <div class="form-group" id="resaVendeurSelectWrap"><label class="form-label">Vendeur</label><select class="form-input" id="resaVendeur"></select></div>
+        <div class="section-title">Agent DAF Trucks & Client</div>
+        <div class="form-group" id="resaVendeurStaticWrap"><label class="form-label">Agent DAF Trucks</label><div class="form-input" id="resaVendeurStatic" style="background:var(--gray-light);color:var(--dark);display:flex;align-items:center"></div></div>
+        <div class="form-group" id="resaVendeurSelectWrap"><label class="form-label">Agent DAF Trucks</label><select class="form-input" id="resaVendeur"></select></div>
         <div class="form-group"><label class="form-label">Entreprise cliente</label><input type="text" class="form-input" id="resaEntreprise" placeholder="Nom de l'entreprise"></div>
         <div class="form-group"><label class="form-label">Note</label><textarea class="form-input" id="resaNote" placeholder="Informations..."></textarea></div>
       </div>
@@ -444,7 +444,7 @@ input[type="file"] { display: none; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-header">
-      <div class="modal-title" id="modalVendorTitle">Nouveau vendeur</div>
+      <div class="modal-title" id="modalVendorTitle">Nouvel agent DAF Trucks</div>
       <button class="modal-close" onclick="closeModal('modalVendor')">✕</button>
     </div>
     <div class="modal-body">
@@ -676,7 +676,7 @@ function populateResaVendeurSelect(selectedValue) {
   sel.innerHTML=html;
   sel.value=selectedValue||'';
 
-  // Non-admin : champ vendeur figé (lecture seule) ; admin : liste déroulante modifiable
+  // Non-admin : champ agent DAF Trucks figé (lecture seule) ; admin : liste déroulante modifiable
   var staticWrap=document.getElementById('resaVendeurStaticWrap');
   var selectWrap=document.getElementById('resaVendeurSelectWrap');
   if(APP.isAdmin) {
@@ -1025,15 +1025,27 @@ function selectVeh(id) { APP.selectedVehicleId=id; renderVehSelector(); checkCon
 
 function checkConflict() {
   var s=document.getElementById('resaStart').value, e=document.getElementById('resaEnd').value, editId=document.getElementById('editResaId').value;
-  if(!s||!e||!APP.selectedVehicleId) return;
-  var conflict=false;
+  var warn=document.getElementById('conflictWarn');
+  if(!s||!e||!APP.selectedVehicleId) { warn.style.display='none'; return false; }
+  var conflictMsgs=[];
   for(var i=0;i<APP.reservations.length;i++) {
     var r=APP.reservations[i];
     if(r.vehicle_id!==APP.selectedVehicleId) continue;
     if(editId&&r.id===editId) continue;
-    if(s<=r.date_end&&e>=r.date_start) {conflict=true;break;}
+    if(s<=r.date_end&&e>=r.date_start) {
+      var who=r.entreprise||r.vendeur||'inconnue';
+      // Préciser quelle date pose problème
+      if(s<=r.date_end&&s>=r.date_start) {
+        conflictMsgs.push('Chevauchement avec "'+who+'" (se termine le '+formatDate(r.date_end)+')');
+      } else {
+        conflictMsgs.push('Chevauchement avec "'+who+'" (commence le '+formatDate(r.date_start)+')');
+      }
+    }
   }
-  document.getElementById('conflictWarn').style.display=conflict?'block':'none';
+  var hasConflict=conflictMsgs.length>0;
+  warn.innerHTML='⚠️ Conflit : '+conflictMsgs.join(' · ');
+  warn.style.display=hasConflict?'block':'none';
+  return hasConflict;
 }
 
 function saveResa() {
@@ -1048,7 +1060,8 @@ function saveResa() {
   if(!vehicleId) return showToast('Sélectionnez un véhicule');
   if(!dateStart||!dateEnd) return showToast('Dates requises');
   if(dateEnd<dateStart) return showToast('Date de fin invalide');
-  if(!vendeur) return showToast('Prénom vendeur requis');
+  if(!vendeur) return showToast('Agent DAF Trucks requis');
+  if(checkConflict()) return showToast('Impossible d\'enregistrer : conflit de dates avec une réservation existante');
 
   showLoader('Enregistrement...');
   var data={vehicle_id:vehicleId,date_start:dateStart,date_end:dateEnd,vendeur:vendeur,entreprise:entreprise,note:note};
@@ -1100,7 +1113,7 @@ function openResaDetail(id) {
   html+='<div class="section-title">Informations</div>';
   html+='<div class="info-row"><span class="info-label">Statut</span><span class="status-badge '+statusCls[status]+'">'+statusLabels[status]+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Véhicule</span><span class="info-value">'+esc(immat)+'</span></div>';
-  html+='<div class="info-row"><span class="info-label">Vendeur</span><span class="info-value">'+esc(r.vendeur)+'</span></div>';
+  html+='<div class="info-row"><span class="info-label">Agent DAF Trucks</span><span class="info-value">'+esc(r.vendeur)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Début</span><span class="info-value">'+formatDate(r.date_start)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Fin</span><span class="info-value">'+formatDate(r.date_end)+'</span></div>';
   if(r.entreprise) html+='<div class="info-row"><span class="info-label">Entreprise cliente</span><span class="info-value">'+esc(r.entreprise)+'</span></div>';
@@ -1194,11 +1207,11 @@ function openResaDetail(id) {
   }
   html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
   html+='<span class="doc-chip '+(r.signature_depart?'ok':'missing')+'">'+(r.signature_depart?'✅':'⬜')+' Client</span>';
-  html+='<span class="doc-chip '+(r.signature_vendeur_depart?'ok':'missing')+'">'+(r.signature_vendeur_depart?'✅':'⬜')+' Vendeur</span>';
+  html+='<span class="doc-chip '+(r.signature_vendeur_depart?'ok':'missing')+'">'+(r.signature_vendeur_depart?'✅':'⬜')+' Agent DAF</span>';
   html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
   html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'client\')">'+(r.signature_depart?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (vendeur)':'✍️ Signer (vendeur)')+'</button>';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
   html+='</div>';
 
   // ===================== BLOC RETOUR =====================
@@ -1208,7 +1221,7 @@ function openResaDetail(id) {
   html+='<div class="phase-block phase-block-retour">';
   html+='<div class="phase-title phase-title-retour">🏁 RETOUR</div>';
   if(r.vendeur_retour && r.vendeur_retour!==r.vendeur) {
-    html+='<div class="info-row" style="margin-bottom:8px"><span class="info-label">Retour effectué par</span><span class="info-value" style="font-weight:700;color:var(--blue)">'+esc(getVendeurDisplay(r.vendeur_retour))+'</span></div>';
+    html+='<div class="info-row" style="margin-bottom:8px"><span class="info-label">Agent DAF Trucks (retour)</span><span class="info-value" style="font-weight:700;color:var(--blue)">'+esc(getVendeurDisplay(r.vendeur_retour))+'</span></div>';
   }
 
   // Chauffeur / état des lieux retour (pré-rempli avec le chauffeur du départ, modifiable)
@@ -1277,11 +1290,11 @@ function openResaDetail(id) {
   }
   html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
   html+='<span class="doc-chip '+(r.signature_retour?'ok':'missing')+'">'+(r.signature_retour?'✅':'⬜')+' Client</span>';
-  html+='<span class="doc-chip '+(r.signature_vendeur_retour?'ok':'missing')+'">'+(r.signature_vendeur_retour?'✅':'⬜')+' Vendeur</span>';
+  html+='<span class="doc-chip '+(r.signature_vendeur_retour?'ok':'missing')+'">'+(r.signature_vendeur_retour?'✅':'⬜')+' Agent DAF</span>';
   html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
   html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'client\')">'+(r.signature_retour?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'vendeur\')">'+(r.signature_vendeur_retour?'✍️ Re-signer (vendeur)':'✍️ Signer (vendeur)')+'</button>';
+  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'vendeur\')">'+(r.signature_vendeur_retour?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
   html+='</div>';
 
   html+='</div>'; // fin phase-block-retour
@@ -1319,7 +1332,7 @@ function editResa(id) {
   var r=getResa(id);
   if(!r) return;
   if(!APP.isAdmin && r.vendeur!==APP.user) {
-    showToast('Modification réservée au vendeur propriétaire ou à l\'administrateur');
+    showToast('Modification réservée à l\'agent DAF Trucks propriétaire ou à l\'administrateur');
     return;
   }
   closeModal('modalResaDetail');
@@ -1346,7 +1359,7 @@ function deleteResa(id) {
   }
 
   // Ni admin, ni propriétaire de la réservation : PIN administrateur requis
-  var pin=prompt('Cette réservation appartient à un autre vendeur.\nEntrez le PIN administrateur pour la supprimer :');
+  var pin=prompt('Cette réservation appartient à un autre agent DAF Trucks.\nEntrez le PIN administrateur pour la supprimer :');
   if(pin===null) return;
   if(pin!==APP.adminPin) { showToast('PIN administrateur incorrect'); return; }
   if(!confirm('Supprimer cette réservation ?')) return;
@@ -1600,7 +1613,7 @@ function openSignaturePad(resaId, type, who) {
   document.getElementById('sigResaId').value=resaId;
   document.getElementById('sigType').value=type;
   document.getElementById('sigWho').value=who;
-  var whoLabel=who==='vendeur'?'Vendeur':'Client';
+  var whoLabel=who==='vendeur'?'Agent DAF Trucks':'Client';
   document.querySelector('#modalSignature .modal-title').textContent='Signature '+whoLabel+' — '+(type==='depart'?'Départ':'Retour');
   openModal('modalSignature');
   setTimeout(function(){
@@ -1780,7 +1793,7 @@ function downloadZip(resaId, scope) {
   // Info fiche texte
   var fiche='RÉSERVATION '+r.id+'\n';
   fiche+='Véhicule: '+(veh?veh.immat:'-')+'\n';
-  fiche+='Vendeur: '+getVendeurDisplay(r.vendeur)+'\n';
+  fiche+='Agent DAF Trucks: '+getVendeurDisplay(r.vendeur)+'\n';
   fiche+='Du '+formatDate(r.date_start)+' au '+formatDate(r.date_end)+'\n';
   fiche+='Entreprise cliente: '+(r.entreprise||'-')+'\n';
   if(scope==='all'||scope==='depart') {
@@ -2026,7 +2039,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
       }
 
       drawBlock(margin, 'SIGNATURE CLIENT — '+(type==='depart'?'DÉPART':'RETOUR'), chauffeurNomComplet, clientImg);
-      drawBlock(margin+colW+colGap, 'SIGNATURE VENDEUR — '+(type==='depart'?'DÉPART':'RETOUR'), vendeurNom, vendeurImg);
+      drawBlock(margin+colW+colGap, 'SIGNATURE AGENT DAF TRUCKS — '+(type==='depart'?'DÉPART':'RETOUR'), vendeurNom, vendeurImg);
 
       y+=blockH+3;
 
@@ -2267,12 +2280,12 @@ function genPdfConfirmation(resaId, type, outputMode) {
   }
 
   // ===== RESPONSABLE & CLIENT =====
-  y=sectionBox('RESPONSABLE DAF & CLIENT', y);
-  fieldLine('VENDEUR DÉPART', getVendeurDisplay(r.vendeur), y, 0);
+  y=sectionBox('AGENT DAF TRUCKS & CLIENT', y);
+  fieldLine('AGENT DÉPART', getVendeurDisplay(r.vendeur), y, 0);
   fieldLine('ENTREPRISE CLIENTE', r.entreprise, y, contentW/2);
   y+=11;
   if(type==='retour' && r.vendeur_retour && r.vendeur_retour!==r.vendeur) {
-    fieldLine('VENDEUR RETOUR', getVendeurDisplay(r.vendeur_retour), y, 0);
+    fieldLine('AGENT RETOUR', getVendeurDisplay(r.vendeur_retour), y, 0);
     y+=11;
   }
 
@@ -3158,7 +3171,7 @@ function renderVendorPage() {
 function renderVendorList() {
   var html='';
   if(APP.vendors.length===0) {
-    html='<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">Aucun vendeur</div><div class="empty-sub">Ajoutez les vendeurs autorisés à se connecter</div></div>';
+    html='<div class="empty-state"><div class="empty-icon">👤</div><div class="empty-text">Aucun agent</div><div class="empty-sub">Ajoutez les agents DAF Trucks autorisés à se connecter</div></div>';
   }
   for(var i=0;i<APP.vendors.length;i++) {
     var v=APP.vendors[i];
@@ -3175,7 +3188,7 @@ function renderVendorList() {
 }
 
 function openAddVendor() {
-  document.getElementById('modalVendorTitle').textContent='Nouveau vendeur';
+  document.getElementById('modalVendorTitle').textContent='Nouvel agent DAF Trucks';
   document.getElementById('vendorPrenom').value='';
   document.getElementById('vendorNom').value='';
   document.getElementById('vendorPin').value='';
@@ -3187,7 +3200,7 @@ function editVendor(id) {
   var v=null;
   for(var i=0;i<APP.vendors.length;i++) if(APP.vendors[i].id===id) v=APP.vendors[i];
   if(!v) return;
-  document.getElementById('modalVendorTitle').textContent='Modifier vendeur';
+  document.getElementById('modalVendorTitle').textContent='Modifier agent DAF Trucks';
   document.getElementById('vendorPrenom').value=v.prenom||'';
   document.getElementById('vendorNom').value=v.nom||'';
   document.getElementById('vendorPin').value=v.pin||'';
@@ -3215,19 +3228,19 @@ function saveVendor() {
   }).then(function(){
     hideLoader();
     closeModal('modalVendor');
-    showToast(editId?'Vendeur modifié':'Vendeur ajouté');
+    showToast(editId?'Agent modifié':'Agent ajouté');
   }).catch(function(e){hideLoader();showToast('Erreur: '+(e.message||JSON.stringify(e)));console.error(e);});
 }
 
 function deleteVendor(id) {
-  if(!confirm('Supprimer ce vendeur ? Il ne pourra plus se connecter.')) return;
+  if(!confirm('Supprimer cet agent ? Il ne pourra plus se connecter.')) return;
   showLoader('Suppression...');
   sb.from('vendors').delete().eq('id',id).then(function(res){
     if(res.error) throw res.error;
     return renderVendorPage();
   }).then(function(){
     hideLoader();
-    showToast('Vendeur supprimé');
+    showToast('Agent supprimé');
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
