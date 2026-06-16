@@ -2291,11 +2291,15 @@ function genPdfConfirmation(resaId, type, outputMode) {
   var docList = type==='depart'?DEPART_DOCS:RETOUR_DOCS;
   var docLabel = type==='depart'?'DOCUMENTS À REMETTRE AU DÉPART':'RÉCAPITULATIF DOCUMENTS';
 
+  // Hauteur totale du bloc (titre de section + une ligne par document) : si ça ne tient pas
+  // entièrement sur la page courante, on saute de page AVANT de commencer à dessiner le bloc.
+  var docBlockH = 12 + docList.length*6 + 5;
+  if(y+docBlockH>pageH-margin) { doc.addPage(); y=margin; }
+
   y=sectionBox(docLabel, y);
   for(var k=0;k<docList.length;k++) {
     var item=docList[k];
     var hasDoc = item.source==='vehicle' ? (veh&&getDocFiles(veh,item.key).length>0) : getDocFiles(r,item.key).length>0;
-    if(y>pageH-25) { doc.addPage(); y=margin; }
     checkbox(item.label, hasDoc, 0, y);
     y+=6;
   }
