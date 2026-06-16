@@ -1203,6 +1203,9 @@ function openResaDetail(id) {
   html+='<div class="divider"></div>';
   html+='<div class="phase-block phase-block-retour">';
   html+='<div class="phase-title phase-title-retour">🏁 RETOUR</div>';
+  if(r.vendeur_retour && r.vendeur_retour!==r.vendeur) {
+    html+='<div class="info-row" style="margin-bottom:8px"><span class="info-label">Retour effectué par</span><span class="info-value" style="font-weight:700;color:var(--blue)">'+esc(getVendeurDisplay(r.vendeur_retour))+'</span></div>';
+  }
 
   // Chauffeur / état des lieux retour (pré-rempli avec le chauffeur du départ, modifiable)
   var chRetourNom=(r.chauffeur_retour_nom!=null)?r.chauffeur_retour_nom:(r.chauffeur_nom||'');
@@ -1446,6 +1449,7 @@ function uploadPhotos(resaId, type, input) {
               if(res2.error) throw res2.error;
               return loadReservations();
             }).then(function(){
+              if(type==='retour'||type==='degradation') autoSetVendeurRetour(resaId);
               hideLoader();
               openResaDetail(resaId);
               showToast('Photo(s) ajoutée(s)');
@@ -1503,6 +1507,7 @@ function saveJaugeNiveau(resaId, field) {
       return sb.from('vehicles').update({adblue_actuel:val}).eq('id',r.vehicle_id);
     }
   }).then(function(){
+    if(field==='carburant_retour'||field==='adblue_retour') autoSetVendeurRetour(resaId);
     return Promise.all([loadVehicles(),loadReservations()]);
   }).then(function(){
     hideLoader();
@@ -1538,6 +1543,15 @@ function saveHoraires(resaId) {
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
+// Enregistre automatiquement le vendeur qui effectue le retour si ce n'est pas le vendeur original
+function autoSetVendeurRetour(resaId) {
+  var r=getResa(resaId); if(!r) return Promise.resolve();
+  if(!APP.user || APP.user===r.vendeur || r.vendeur_retour===APP.user) return Promise.resolve();
+  return sb.from('reservations').update({vendeur_retour: APP.user}).eq('id',resaId).then(function(){
+    return loadReservations();
+  }).catch(function(e){console.error('autoSetVendeurRetour error:',e);});
+}
+
 function saveKilometrage(resaId) {
   var r=getResa(resaId); if(!r) return;
   var kmDepart=document.getElementById('kmDepart_'+resaId).value;
@@ -1558,6 +1572,7 @@ function saveKilometrage(resaId) {
       return sb.from('vehicles').update({kilometrage_actuel:kmRetour}).eq('id',r.vehicle_id);
     }
   }).then(function(){
+    if(kmRetour!=null) autoSetVendeurRetour(resaId);
     return Promise.all([loadVehicles(),loadReservations()]);
   }).then(function(){
     hideLoader();
@@ -1632,6 +1647,7 @@ function saveSignature() {
     return sb.from('reservations').update(update).eq('id',resaId);
   }).then(function(res2){
     if(res2.error) throw res2.error;
+    if(type==='retour') autoSetVendeurRetour(resaId);
     return loadReservations();
   }).then(function(){
     hideLoader();
@@ -1665,6 +1681,7 @@ function saveDriverInfoRetour(resaId) {
   };
   sb.from('reservations').update(data).eq('id',resaId).then(function(res){
     if(res.error) throw res.error;
+    autoSetVendeurRetour(resaId);
     return loadReservations();
   }).then(function(){
     showToast('Informations chauffeur (retour) enregistrées');
@@ -2242,9 +2259,13 @@ function genPdfConfirmation(resaId, type, outputMode) {
 
   // ===== RESPONSABLE & CLIENT =====
   y=sectionBox('RESPONSABLE DAF & CLIENT', y);
-  fieldLine('VENDEUR', getVendeurDisplay(r.vendeur), y, 0);
+  fieldLine('VENDEUR DÉPART', getVendeurDisplay(r.vendeur), y, 0);
   fieldLine('ENTREPRISE CLIENTE', r.entreprise, y, contentW/2);
   y+=11;
+  if(type==='retour' && r.vendeur_retour && r.vendeur_retour!==r.vendeur) {
+    fieldLine('VENDEUR RETOUR', getVendeurDisplay(r.vendeur_retour), y, 0);
+    y+=11;
+  }
 
   // ===== CHAUFFEUR =====
   y=sectionBox('CHAUFFEUR', y);
@@ -2986,8 +3007,17 @@ function previewVehiclePhoto(input) {
   });
 }
 
+function requireAdminPin(callback) {
+  if(APP.isAdmin) { callback(); return; }
+  var pin=prompt('Action réservée à l\'administrateur.\nEntrez le PIN administrateur :');
+  if(pin===null) return;
+  if(pin!==APP.adminPin) { showToast('PIN administrateur incorrect'); return; }
+  callback();
+}
+
 function openAddVehicle() {
-  document.getElementById('modalVehicleTitle').textContent='Nouveau véhicule';
+  requireAdminPin(function(){
+    document.getElementById('modalVehicleTitle').textContent='Nouveau véhicule';
   document.getElementById('vehImmat').value='';
   document.getElementById('vehModele').value='';
   document.getElementById('vehKm').value='';
@@ -3003,9 +3033,11 @@ function openAddVehicle() {
   document.getElementById('vehPhotoPreviewWrap').style.display='none';
   document.getElementById('editVehicleId').value='';
   openModal('modalVehicle');
+  }); // fin requireAdminPin
 }
 
 function editVehicle(id) {
+  requireAdminPin(function(){
   var v=getVehicle(id); if(!v) return;
   document.getElementById('modalVehicleTitle').textContent='Modifier véhicule';
   document.getElementById('vehImmat').value=v.immat;
@@ -3028,6 +3060,7 @@ function editVehicle(id) {
   }
   document.getElementById('editVehicleId').value=id;
   openModal('modalVehicle');
+  }); // fin requireAdminPin
 }
 
 function saveVehicle() {
