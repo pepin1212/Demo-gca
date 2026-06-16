@@ -108,9 +108,11 @@ body { overflow-x: hidden; width: 100%; position: relative; font-family: -apple-
 .form-section .section-title { border-bottom: none; padding-bottom: 0; }
 .form-section .form-group:last-child { margin-bottom: 0; }
 .form-label { font-size: 11px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; display: block; }
-.form-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--gray-light); border-radius: var(--radius-sm); font-size: 14px; background: white; color: var(--dark); outline: none; transition: border-color 0.2s; }
+.form-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--gray-light); border-radius: var(--radius-sm); font-size: 16px; background: white; color: var(--dark); outline: none; transition: border-color 0.2s; }
 .form-input:focus { border-color: var(--blue); }
 textarea.form-input { resize: vertical; min-height: 70px; }
+/* iOS zoom fix : tous les inputs/selects/textareas à 16px minimum */
+input, select, textarea { font-size: 16px !important; }
 
 /* CALENDAR */
 .cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
