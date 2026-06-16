@@ -2223,7 +2223,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
     });
   }
 
-  if(heroImgData) {
+  if(heroImgData && type==='depart') {
     var heroH=68;
     var panelMinW=66; // largeur minimale du panneau titre/note (mm)
 
