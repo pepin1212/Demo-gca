@@ -1144,8 +1144,12 @@ function openResaDetail(id) {
 
   // ===================== BLOC DÉPART =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-depart">';
+  var departEditable=APP.isAdmin||(r.vendeur===APP.user);
+  html+='<div class="phase-block phase-block-depart"'+(departEditable?'':' style="pointer-events:none;opacity:0.7"')+'>';
   html+='<div class="phase-title phase-title-depart">🚗 DÉPART</div>';
+  if(!departEditable) {
+    html+='<div style="background:rgba(59,130,246,0.12);border-radius:8px;padding:8px 10px;font-size:12px;color:#1D4ED8;margin-bottom:10px">🔒 Section réservée au vendeur '+(r.vendeur||'propriétaire')+'. Consultation uniquement.</div>';
+  }
 
   // Chauffeur / état des lieux départ
   html+='<div class="section-title">Chauffeur (état des lieux départ)</div>';
@@ -1301,8 +1305,9 @@ function openResaDetail(id) {
   html+='<button class="btn btn-success btn-sm" onclick="downloadZipRetour(\''+id+'\')">📦 ZIP Retour</button>';
   html+='</div>';
   html+='<button class="btn btn-success btn-full" style="margin-bottom:8px" onclick="downloadAllDemoZip(\''+id+'\')">📦 Tout télécharger (ZIP)</button>';
+  var isOwner=APP.isAdmin||(r.vendeur===APP.user);
   html+='<div style="display:flex;gap:8px">';
-  html+='<button class="btn btn-light" style="flex:1" onclick="editResa(\''+id+'\')">✏️ Modifier</button>';
+  if(isOwner) html+='<button class="btn btn-light" style="flex:1" onclick="editResa(\''+id+'\')">✏️ Modifier</button>';
   html+='<button class="btn btn-danger" style="flex:1" onclick="deleteResa(\''+id+'\')">🗑️ Supprimer</button>';
   html+='</div>';
 
@@ -1313,6 +1318,10 @@ function openResaDetail(id) {
 function editResa(id) {
   var r=getResa(id);
   if(!r) return;
+  if(!APP.isAdmin && r.vendeur!==APP.user) {
+    showToast('Modification réservée au vendeur propriétaire ou à l\'administrateur');
+    return;
+  }
   closeModal('modalResaDetail');
   document.getElementById('modalResaTitle').textContent='Modifier réservation';
   document.getElementById('editResaId').value=id;
@@ -2980,13 +2989,13 @@ function renderVehicleList() {
       '<div class="card-header-actions">'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleHistory(\''+v.id+'\')">🕒 Historique</button>'+
       '<button class="btn btn-light btn-sm" onclick="openVehicleDocs(\''+v.id+'\')">📄 Docs</button>'+
-      '<button class="btn btn-light btn-sm" onclick="editVehicle(\''+v.id+'\')">✏️</button></div></div>'+
+      (APP.isAdmin?'<button class="btn btn-light btn-sm" onclick="editVehicle(\''+v.id+'\')">✏️</button>':'')+'</div></div>'+
       '<div class="card-body">'+
       indicatorsHtml+
       infoHtml+
       '<div class="docs-chips" style="margin-top:8px">'+docsHtml+'</div>'+
       atelierHtml+
-      '<button class="btn btn-danger btn-sm" style="margin-top:10px" onclick="deleteVehicle(\''+v.id+'\')">🗑️ Supprimer</button>'+
+      (APP.isAdmin?'<button class="btn btn-danger btn-sm" style="margin-top:10px" onclick="deleteVehicle(\''+v.id+'\')">🗑️ Supprimer</button>':'')+
       '</div></div>';
   }
   document.getElementById('vehicleList').innerHTML=html;
@@ -3118,18 +3127,20 @@ function saveVehicle() {
 }
 
 function deleteVehicle(id) {
-  var resaCount=APP.reservations.filter(function(r){return r.vehicle_id===id;}).length;
-  var msg=resaCount>0?'Ce véhicule a '+resaCount+' réservation(s). Supprimer quand même ?':'Supprimer ce véhicule ?';
-  if(!confirm(msg)) return;
-  showLoader('Suppression...');
-  sb.from('vehicles').delete().eq('id',id).then(function(res){
-    if(res.error) throw res.error;
-    return Promise.all([loadVehicles(),loadReservations()]);
-  }).then(function(){
-    hideLoader();
-    render();
-    showToast('Véhicule supprimé');
-  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+  requireAdminPin(function(){
+    var resaCount=APP.reservations.filter(function(r){return r.vehicle_id===id;}).length;
+    var msg=resaCount>0?'Ce véhicule a '+resaCount+' réservation(s). Supprimer quand même ?':'Supprimer ce véhicule ?';
+    if(!confirm(msg)) return;
+    showLoader('Suppression...');
+    sb.from('vehicles').delete().eq('id',id).then(function(res){
+      if(res.error) throw res.error;
+      return Promise.all([loadVehicles(),loadReservations()]);
+    }).then(function(){
+      hideLoader();
+      render();
+      showToast('Véhicule supprimé');
+    }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+  });
 }
 
 // =============================================
