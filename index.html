@@ -1192,10 +1192,11 @@ function openResaDetail(id) {
     var hasDoc=docFiles.length>0;
     var isPermis=(RESA_DOCS[k]==='Permis Chauffeur');
     var isAssurance=(RESA_DOCS[k]==='Assurance');
-    var checkKey=isPermis?'permis_verifie':(isAssurance?'assurance_verifiee':null);
+    var isContrat=(RESA_DOCS[k]==='Contrat de Prêt');
+    var checkKey=isPermis?'permis_verifie':(isAssurance?'assurance_verifiee':(isContrat?'contrat_verifie':null));
     var checkConfirmed=checkKey?!!r[checkKey]:false;
     var confirmed=hasDoc||checkConfirmed;
-    var displayLabel=isPermis?'Permis de conduire (chauffeur)':(isAssurance?'Mémo assurance':RESA_DOCS[k]);
+    var displayLabel=isPermis?'Permis de conduire (chauffeur)':(isAssurance?'Mémo assurance':(isContrat?'Contrat de prêt':RESA_DOCS[k]));
 
     html+='<div class="doc-row" style="flex-direction:column;align-items:stretch;gap:6px">';
     html+='<div style="display:flex;align-items:center;justify-content:space-between;width:100%">';
@@ -1214,7 +1215,7 @@ function openResaDetail(id) {
     }
     if(checkKey) {
       html+='<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray);cursor:pointer;padding-left:2px">';
-      html+='<input type="checkbox" id="'+(isPermis?'permisCheck_':'assuranceCheck_')+id+'" '+(checkConfirmed?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:16px;height:16px">';
+      html+='<input type="checkbox" id="'+(isPermis?'permisCheck_':(isAssurance?'assuranceCheck_':'contratCheck_'))+id+'" '+(checkConfirmed?'checked':'')+' onchange="saveDriverInfo(\''+id+'\')" style="width:16px;height:16px">';
       html+='Je confirme être en possession de ce document (sans le téléverser)</label>';
     }
     html+='</div>';
@@ -1471,6 +1472,7 @@ function uploadResaDoc(resaId, docKey, input) {
       // Auto-cocher la case de confirmation si on uploade le permis ou l'assurance
       if(docKey===('doc_'+slugify('Permis Chauffeur'))) update.permis_verifie=true;
       if(docKey===('doc_'+slugify('Assurance'))) update.assurance_verifiee=true;
+      if(docKey===('doc_'+slugify('Contrat de Prêt'))) update.contrat_verifie=true;
       return sb.from('reservations').update(update).eq('id',resaId);
     }).then(function(res){
       if(res.error) throw res.error;
@@ -1794,7 +1796,8 @@ function saveDriverInfo(resaId) {
     chauffeur_prenom: document.getElementById('drvPrenom_'+resaId).value.trim(),
     chauffeur_telephone: document.getElementById('drvTel_'+resaId).value.trim(),
     permis_verifie: document.getElementById('permisCheck_'+resaId).checked,
-    assurance_verifiee: document.getElementById('assuranceCheck_'+resaId).checked
+    assurance_verifiee: document.getElementById('assuranceCheck_'+resaId).checked,
+    contrat_verifie: document.getElementById('contratCheck_'+resaId).checked
   };
   sb.from('reservations').update(data).eq('id',resaId).then(function(res){
     if(res.error) throw res.error;
@@ -1928,6 +1931,7 @@ function downloadZip(resaId, scope) {
   }
   fiche+='Permis vérifié: '+(r.permis_verifie?'Oui':'Non')+'\n';
   fiche+='Assurance vérifiée: '+(r.assurance_verifiee?'Oui':'Non')+'\n';
+  fiche+='Contrat de prêt vérifié: '+(r.contrat_verifie?'Oui':'Non')+'\n';
   fiche+='Note: '+(r.note||'-')+'\n';
   zip.file('fiche_reservation.txt', fiche);
 
@@ -2022,8 +2026,9 @@ function genPdfDepart(resaId) {
   var r=getResa(resaId); if(!r) return;
   var hasPermis=!!r.permis_verifie || getDocFiles(r,'doc_'+slugify('Permis Chauffeur')).length>0;
   var hasAssurance=!!r.assurance_verifiee || getDocFiles(r,'doc_'+slugify('Assurance')).length>0;
-  if(!hasPermis || !hasAssurance) {
-    showAlert('Le Permis de conduire et le Mémo assurance doivent être téléversés ou cochés avant de générer le rapport de départ.', '📋');
+  var hasContrat=!!r.contrat_verifie || getDocFiles(r,'doc_'+slugify('Contrat de Prêt')).length>0;
+  if(!hasPermis || !hasAssurance || !hasContrat) {
+    showAlert('Le Permis de conduire, le Mémo assurance et le Contrat de prêt doivent être téléversés ou cochés avant de générer le rapport de départ.', '📋');
     return;
   }
   if(!r.signature_depart || !r.signature_vendeur_depart) {
@@ -2491,6 +2496,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
     // Pour permis et assurance : coché manuellement compte aussi
     if(!present && item.key===('doc_'+slugify('Permis Chauffeur'))) present=!!r.permis_verifie;
     if(!present && item.key===('doc_'+slugify('Assurance'))) present=!!r.assurance_verifiee;
+    if(!present && item.key===('doc_'+slugify('Contrat de Prêt'))) present=!!r.contrat_verifie;
     return {item:item, hasDoc:present};
   });
 
