@@ -1492,11 +1492,20 @@ function deleteResaDoc(resaId, docKey, index) {
   if(!confirm('Supprimer ce fichier ?')) return;
   var r=getResa(resaId); if(!r) return;
   var files=getDocFiles(r, docKey).slice();
+  var fileToDelete=files[index];
   files.splice(index,1);
   var update={};
   update[docKey]=files;
   showLoader('Suppression...');
-  sb.from('reservations').update(update).eq('id',resaId).then(function(res){
+  // Supprimer le fichier physique du storage
+  var storagePromise=Promise.resolve();
+  if(fileToDelete && fileToDelete.url) {
+    var path=storagePathFromUrl(fileToDelete.url);
+    if(path) storagePromise=sb.storage.from('daf-documents').remove([path]).catch(function(e){console.error('Storage remove error:',e);});
+  }
+  storagePromise.then(function(){
+    return sb.from('reservations').update(update).eq('id',resaId);
+  }).then(function(res){
     if(res.error) throw res.error;
     return loadReservations();
   }).then(function(){
@@ -1849,10 +1858,20 @@ function deletePhoto(resaId, type, index) {
   var r=getResa(resaId); if(!r) return;
   var key=type==='depart'?'photos_depart':(type==='retour'?'photos_retour':'photos_degradation');
   var photos=(r[key]||[]).slice();
+  var photoToDelete=photos[index];
   photos.splice(index,1);
   var update={}; update[key]=photos;
   showLoader('Suppression...');
-  sb.from('reservations').update(update).eq('id',resaId).then(function(res){
+  // Supprimer la photo physique du storage
+  var storagePromise=Promise.resolve();
+  var photoUrl=photoToDelete&&(typeof photoToDelete==='string'?photoToDelete:photoToDelete.url);
+  if(photoUrl) {
+    var path=storagePathFromUrl(photoUrl);
+    if(path) storagePromise=sb.storage.from('daf-documents').remove([path]).catch(function(e){console.error('Storage remove error:',e);});
+  }
+  storagePromise.then(function(){
+    return sb.from('reservations').update(update).eq('id',resaId);
+  }).then(function(res){
     if(res.error) throw res.error;
     return loadReservations();
   }).then(function(){
@@ -3341,7 +3360,9 @@ function deleteVehicle(id) {
     var msg=resaCount>0?'Ce véhicule a '+resaCount+' réservation(s). Supprimer quand même ?':'Supprimer ce véhicule ?';
     if(!confirm(msg)) return;
     showLoader('Suppression...');
-    sb.from('vehicles').delete().eq('id',id).then(function(res){
+    deleteVehicleFiles(id).then(function(){
+      return sb.from('vehicles').delete().eq('id',id);
+    }).then(function(res){
       if(res.error) throw res.error;
       return Promise.all([loadVehicles(),loadReservations()]);
     }).then(function(){
@@ -3350,6 +3371,24 @@ function deleteVehicle(id) {
       showToast('Véhicule supprimé');
     }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
   });
+}
+
+// Supprime tous les fichiers du storage associés à un véhicule (documents, photo)
+function deleteVehicleFiles(vehicleId) {
+  var prefix='vehicles/'+vehicleId;
+  return sb.storage.from('daf-documents').list(prefix, {limit:1000}).then(function(res){
+    if(res.error || !res.data || res.data.length===0) return;
+    var paths=res.data.map(function(f){return prefix+'/'+f.name;});
+    return sb.storage.from('daf-documents').remove(paths);
+  }).catch(function(e){console.error('deleteVehicleFiles error:',e);});
+}
+
+// Extrait le chemin storage depuis une URL publique Supabase
+function storagePathFromUrl(url) {
+  var marker='/object/public/daf-documents/';
+  var idx=url.indexOf(marker);
+  if(idx===-1) return null;
+  return url.substring(idx+marker.length);
 }
 
 // =============================================
@@ -3545,10 +3584,19 @@ function deleteVehicleDoc(vehicleId, vkey, index) {
     if(!confirm('Supprimer ce fichier ?')) return;
     var v=getVehicle(vehicleId); if(!v) return;
     var files=getDocFiles(v, vkey).slice();
+    var fileToDelete=files[index];
     files.splice(index,1);
     var update={}; update[vkey]=files;
     showLoader('Suppression...');
-    sb.from('vehicles').update(update).eq('id',vehicleId).then(function(res){
+    // Supprimer le fichier physique du storage
+    var storagePromise=Promise.resolve();
+    if(fileToDelete && fileToDelete.url) {
+      var path=storagePathFromUrl(fileToDelete.url);
+      if(path) storagePromise=sb.storage.from('daf-documents').remove([path]).catch(function(e){console.error('Storage remove error:',e);});
+    }
+    storagePromise.then(function(){
+      return sb.from('vehicles').update(update).eq('id',vehicleId);
+    }).then(function(res){
       if(res.error) throw res.error;
       return loadVehicles();
     }).then(function(){
