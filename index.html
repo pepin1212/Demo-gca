@@ -1723,6 +1723,21 @@ function openSignaturePad(resaId, type, who) {
     showAlert('Champs manquants avant de signer : '+manquants.join(', '), '📝');
     return;
   }
+
+  // Pour le départ : Contrat, Permis et Assurance doivent être confirmés
+  if(type==='depart') {
+    var docsManquants=[];
+    var hasContrat=!!r.contrat_verifie || getDocFiles(r,'doc_'+slugify('Contrat de Prêt')).length>0;
+    var hasPermis=!!r.permis_verifie || getDocFiles(r,'doc_'+slugify('Permis Chauffeur')).length>0;
+    var hasAssurance=!!r.assurance_verifiee || getDocFiles(r,'doc_'+slugify('Assurance')).length>0;
+    if(!hasContrat) docsManquants.push('Contrat de prêt');
+    if(!hasPermis) docsManquants.push('Permis de conduire');
+    if(!hasAssurance) docsManquants.push('Mémo assurance');
+    if(docsManquants.length>0) {
+      showAlert('Documents requis avant de signer : '+docsManquants.join(', ')+'. Veuillez téléverser ou cocher la confirmation pour chacun.', '📋');
+      return;
+    }
+  }
   document.getElementById('sigResaId').value=resaId;
   document.getElementById('sigType').value=type;
   document.getElementById('sigWho').value=who;
@@ -2490,9 +2505,7 @@ function genPdfConfirmation(resaId, type, outputMode) {
     {label:'Permis de conduire chauffeur', source:'resa', key:'doc_'+slugify('Permis Chauffeur')},
     {label:'Mémo assurance', source:'resa', key:'doc_'+slugify('Assurance')}
   ];
-  var RETOUR_DOCS = RESA_DOCS.filter(function(label){
-    return label!=='Assurance' && label!=='Permis Chauffeur';
-  }).map(function(label){return {label:label, source:'resa', key:'doc_'+slugify(label)};});
+  var RETOUR_DOCS = [{label:'Rapport de consommation', source:'resa', key:'doc_'+slugify('Rapport Conso')}];
 
   var docList = type==='depart'?DEPART_DOCS:RETOUR_DOCS;
   var docLabel = type==='depart'?'DOCUMENTS À REMETTRE AU DÉPART':'RÉCAPITULATIF DOCUMENTS';
