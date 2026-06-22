@@ -372,6 +372,59 @@ input[type="file"] { display: none; }
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     Agents DAF<div class="nav-dot"></div>
   </button>
+  <button class="nav-btn" onclick="showPage('reprises',this)" id="nav-reprises">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    Reprises<div class="nav-dot"></div>
+  </button>
+</div>
+
+<!-- PAGE REPRISES -->
+<div class="page" id="page-reprises">
+  <div class="page-header-sticky">
+    <div class="page-title">Reprises</div>
+    <button class="btn btn-orange btn-sm" onclick="openNewReprise()">+ Nouvelle</button>
+  </div>
+  <div id="repriseList"></div>
+</div>
+
+<!-- MODAL NOUVELLE REPRISE -->
+<div class="modal-overlay" id="modalNewReprise">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">Nouvelle reprise</div>
+      <button class="modal-close" onclick="closeModal('modalNewReprise')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="section-title">Informations véhicule</div>
+        <div class="form-group"><label class="form-label">Nom du client</label><input type="text" class="form-input" id="repriseClient" placeholder="Nom et prénom"></div>
+        <div class="form-group"><label class="form-label">Type de véhicule</label>
+          <select class="form-input" id="repriseType" onchange="toggleCarrosserie()">
+            <option value="">— Sélectionnez —</option>
+            <option value="Tracteur">Tracteur</option>
+            <option value="Porteur">Porteur</option>
+          </select>
+        </div>
+        <div class="form-group" id="repriseCarrosserieWrap" style="display:none"><label class="form-label">Carrosserie</label><input type="text" class="form-input" id="repriseCarrosserie" placeholder="Ex: Benne, Frigorifique, Plateau..."></div>
+        <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="repriseImmat" placeholder="AB-123-CD" style="text-transform:uppercase"></div>
+      </div>
+      <input type="hidden" id="editRepriseId">
+      <button class="btn btn-primary btn-full" onclick="saveReprise()">Créer la reprise</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DÉTAIL REPRISE -->
+<div class="modal-overlay" id="modalRepriseDetail">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title" id="repriseDetailTitle">Contre-expertise reprise</div>
+      <button class="modal-close" onclick="closeModal('modalRepriseDetail')">✕</button>
+    </div>
+    <div class="modal-body" id="repriseDetailBody"></div>
+  </div>
 </div>
 
 <!-- MODALS -->
@@ -784,7 +837,7 @@ loadVendorsForLogin();
 // =============================================
 function loadAll() {
   showLoader('Chargement des données...');
-  Promise.all([loadVehicles(), loadReservations()]).then(function(){
+  Promise.all([loadVehicles(), loadReservations(), loadReprises()]).then(function(){
     hideLoader();
     render();
     updateStorageBar();
@@ -863,6 +916,7 @@ function showPage(id, btn) {
   if(id==='documents') renderDocsList();
   if(id==='vehicules') renderVehicleList();
   if(id==='vendors') renderVendorPage();
+  if(id==='reprises') renderRepriseList();
 }
 
 function render() {
@@ -1157,6 +1211,18 @@ function openResaDetail(id) {
   var statusLabels={active:'En cours',upcoming:'À venir',past:'Terminée'};
   var statusCls={active:'status-active',upcoming:'status-upcoming',past:'status-past'};
 
+  // Verrouillage après signature
+  var departSigned=!!(r.signature_depart && r.signature_vendeur_depart);
+  var retourSigned=!!(r.signature_retour && r.signature_vendeur_retour);
+  // Pour un agent : départ verrouillé si signé, retour verrouillé si signé
+  var departLocked=!APP.isAdmin && departSigned;
+  var retourLocked=!APP.isAdmin && retourSigned;
+  // Tout agent peut renseigner départ et retour (plus de restriction par propriétaire)
+  var canEditDepart=!departLocked;
+  var canEditRetour=!retourLocked;
+  // Boutons de suppression : admin uniquement sauf suppression résa non signée par son créateur
+  var canDeleteResa=APP.isAdmin || (r.vendeur===APP.user && !departSigned);;
+
   document.getElementById('detailTitle').textContent=immat+' · '+esc(r.vendeur);
 
   var html='';
@@ -1210,7 +1276,7 @@ function openResaDetail(id) {
       html+='<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(docFiles[fi].name||'document')+'</span>';
       html+='<div style="display:flex;gap:6px;flex-shrink:0">';
       html+='<button class="btn btn-light btn-xs" onclick="downloadResaDoc(\''+id+'\',\''+docKey+'\','+fi+')">↓</button>';
-      html+='<button class="btn btn-danger btn-xs" onclick="deleteResaDoc(\''+id+'\',\''+docKey+'\','+fi+')">✕</button>';
+      if(APP.isAdmin) html+='<button class="btn btn-danger btn-xs" onclick="deleteResaDoc(\''+id+'\',\''+docKey+'\','+fi+')">✕</button>';
       html+='</div></div>';
     }
     if(checkKey) {
@@ -1225,11 +1291,10 @@ function openResaDetail(id) {
 
   // ===================== BLOC DÉPART =====================
   html+='<div class="divider"></div>';
-  var departEditable=APP.isAdmin||(r.vendeur===APP.user);
-  html+='<div class="phase-block phase-block-depart"'+(departEditable?'':' style="pointer-events:none;opacity:0.7"')+'>';
+  html+='<div class="phase-block phase-block-depart"'+(canEditDepart?'':' style="pointer-events:none;opacity:0.7"')+'>';
   html+='<div class="phase-title phase-title-depart">🚗 DÉPART</div>';
-  if(!departEditable) {
-    html+='<div style="background:rgba(59,130,246,0.12);border-radius:8px;padding:8px 10px;font-size:12px;color:#1D4ED8;margin-bottom:10px">🔒 Section réservée au vendeur '+(r.vendeur||'propriétaire')+'. Consultation uniquement.</div>';
+  if(!canEditDepart) {
+    html+='<div style="background:rgba(59,130,246,0.12);border-radius:8px;padding:8px 10px;font-size:12px;color:#1D4ED8;margin-bottom:10px">🔒 Départ signé — modification impossible. Contactez l\'administrateur.</div>';
   }
 
   // Chauffeur / état des lieux départ
@@ -1261,7 +1326,7 @@ function openResaDetail(id) {
   var pd=r.photos_depart||[];
   for(var p=0;p<pd.length;p++) {
     html+='<img class="photo-thumb" src="'+pd[p]+'" onclick="viewPhoto(\''+pd[p]+'\')" alt="">';
-    html+='<button onclick="deletePhoto(\''+id+'\',\'depart\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
+    if(APP.isAdmin) html+='<button onclick="deletePhoto(\''+id+'\',\'depart\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
   }
   html+='<label class="photo-add" for="upPhotoD_'+id+'">+</label>';
   html+='<input type="file" id="upPhotoD_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'depart\',this)">';
@@ -1280,18 +1345,18 @@ function openResaDetail(id) {
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
   html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'client\')">'+(r.signature_depart?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
   html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
-  html+='</div>';
-
-  // ===================== BLOC RETOUR =====================
   html+='</div>'; // fin phase-block-depart
 
+  // ===================== BLOC RETOUR =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-retour">';
+  html+='<div class="phase-block phase-block-retour"'+(canEditRetour?'':' style="pointer-events:none;opacity:0.7"')+'>';
   html+='<div class="phase-title phase-title-retour">🏁 RETOUR</div>';
+  if(!canEditRetour) {
+    html+='<div style="background:rgba(239,68,68,0.08);border-radius:8px;padding:8px 10px;font-size:12px;color:#B91C1C;margin-bottom:10px">🔒 Retour signé — modification impossible. Contactez l\'administrateur.</div>';
+  }
   if(r.vendeur_retour && r.vendeur_retour!==r.vendeur) {
     html+='<div class="info-row" style="margin-bottom:8px"><span class="info-label">Agent DAF Trucks (retour)</span><span class="info-value" style="font-weight:700;color:var(--blue)">'+esc(getVendeurDisplay(r.vendeur_retour))+'</span></div>';
   }
-
   // Chauffeur / état des lieux retour (pré-rempli avec le chauffeur du départ, modifiable)
   var chRetourNom=(r.chauffeur_retour_nom!=null)?r.chauffeur_retour_nom:(r.chauffeur_nom||'');
   var chRetourPrenom=(r.chauffeur_retour_prenom!=null)?r.chauffeur_retour_prenom:(r.chauffeur_prenom||'');
@@ -1327,7 +1392,7 @@ function openResaDetail(id) {
   var pr=r.photos_retour||[];
   for(var p=0;p<pr.length;p++) {
     html+='<img class="photo-thumb" src="'+pr[p]+'" onclick="viewPhoto(\''+pr[p]+'\')" alt="">';
-    html+='<button onclick="deletePhoto(\''+id+'\',\'retour\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
+    if(APP.isAdmin) html+='<button onclick="deletePhoto(\''+id+'\',\'retour\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
   }
   html+='<label class="photo-add" for="upPhotoR_'+id+'">+</label>';
   html+='<input type="file" id="upPhotoR_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'retour\',this)">';
@@ -1341,7 +1406,7 @@ function openResaDetail(id) {
     html+='<div style="margin-bottom:10px">';
     html+='<div style="display:flex;gap:8px;align-items:flex-start">';
     html+='<img class="photo-thumb" src="'+pdg[p].url+'" onclick="viewPhoto(\''+pdg[p].url+'\')" alt="" style="flex-shrink:0">';
-    html+='<button onclick="deletePhoto(\''+id+'\',\'degradation\','+p+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:auto">✕</button>';
+    if(APP.isAdmin) html+='<button onclick="deletePhoto(\''+id+'\',\'degradation\','+p+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:auto">✕</button>';
     html+='</div>';
     html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(pdg[p].note||'').replace(/"/g,'&quot;')+'" onchange="updateDegradationNote(\''+id+'\','+p+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
     html+='</div>';
@@ -1390,8 +1455,8 @@ function openResaDetail(id) {
   html+='<button class="btn btn-success btn-full" style="margin-bottom:8px" onclick="downloadAllDemoZip(\''+id+'\')">📦 Tout télécharger (ZIP)</button>';
   var isOwner=APP.isAdmin||(r.vendeur===APP.user);
   html+='<div style="display:flex;gap:8px">';
-  if(isOwner) html+='<button class="btn btn-light" style="flex:1" onclick="editResa(\''+id+'\')">✏️ Modifier</button>';
-  html+='<button class="btn btn-danger" style="flex:1" onclick="deleteResa(\''+id+'\')">🗑️ Supprimer</button>';
+  if(isOwner && !departLocked) html+='<button class="btn btn-light" style="flex:1" onclick="editResa(\''+id+'\')">✏️ Modifier</button>';
+  if(canDeleteResa) html+='<button class="btn btn-danger" style="flex:1" onclick="deleteResa(\''+id+'\')">🗑️ Supprimer</button>';
   html+='</div>';
 
   document.getElementById('detailBody').innerHTML=html;
@@ -1401,8 +1466,13 @@ function openResaDetail(id) {
 function editResa(id) {
   var r=getResa(id);
   if(!r) return;
+  var departSigned=!!(r.signature_depart && r.signature_vendeur_depart);
+  if(!APP.isAdmin && departSigned) {
+    showAlert('Cette réservation est verrouillée car le départ a été signé.', '🔒');
+    return;
+  }
   if(!APP.isAdmin && r.vendeur!==APP.user) {
-    showAlert('Modification réservée à l\'agent DAF Trucks propriétaire ou à l\'administrateur.', '🔒');
+    showAlert('Seul l\'agent qui a créé cette réservation peut la modifier.', '🔒');
     return;
   }
   closeModal('modalResaDetail');
@@ -1421,17 +1491,22 @@ function editResa(id) {
 
 function deleteResa(id) {
   var r=getResa(id); if(!r) return;
-  var isOwner=!APP.isAdmin && r.vendeur===APP.user;
+  var departSigned=!!(r.signature_depart && r.signature_vendeur_depart);
 
-  if(APP.isAdmin || isOwner) {
+  if(APP.isAdmin) {
     if(!confirm('Supprimer cette réservation ?')) return;
     return doDeleteResa(id);
   }
 
-  // Ni admin, ni propriétaire de la réservation : PIN administrateur requis
-  var pin=prompt('Cette réservation appartient à un autre agent DAF Trucks.\nEntrez le PIN administrateur pour la supprimer :');
-  if(pin===null) return;
-  if(pin!==APP.adminPin) { showAlert('PIN administrateur incorrect.', '🔒'); return; }
+  // Agent non-admin : uniquement sa propre réservation ET départ non signé
+  if(r.vendeur!==APP.user) {
+    showAlert('Vous ne pouvez supprimer que vos propres réservations.', '🔒');
+    return;
+  }
+  if(departSigned) {
+    showAlert('Cette réservation ne peut plus être supprimée car le départ a été signé. Contactez l\'administrateur.', '🔒');
+    return;
+  }
   if(!confirm('Supprimer cette réservation ?')) return;
   doDeleteResa(id);
 }
@@ -1777,6 +1852,15 @@ function saveSignature() {
   var resaId=document.getElementById('sigResaId').value;
   var type=document.getElementById('sigType').value;
   var who=document.getElementById('sigWho').value||'client';
+
+  // Signature pour une reprise
+  if(type==='reprise_client'||type==='reprise_agent') {
+    var dataUrl=sigPad.toDataURL('image/png');
+    showLoader('Enregistrement de la signature...');
+    saveRepriseSignature(resaId, who, dataUrl);
+    return;
+  }
+
   var field;
   if(who==='vendeur') field=type==='depart'?'signature_vendeur_depart':'signature_vendeur_retour';
   else field=type==='depart'?'signature_depart':'signature_retour';
@@ -3168,6 +3252,438 @@ function deleteReservationFiles(resaId) {
 }
 
 // =============================================
+// REPRISES
+// =============================================
+APP.reprises=[];
+
+function loadReprises() {
+  return sb.from('reprises').select('*').order('created_at',{ascending:false}).then(function(res){
+    if(res.error) throw res.error;
+    APP.reprises=res.data||[];
+  }).catch(function(e){console.error('loadReprises error:',e);});
+}
+
+function toggleCarrosserie() {
+  var type=document.getElementById('repriseType').value;
+  document.getElementById('repriseCarrosserieWrap').style.display=(type==='Porteur')?'':'none';
+}
+
+function openNewReprise() {
+  document.getElementById('repriseClient').value='';
+  document.getElementById('repriseType').value='';
+  document.getElementById('repriseCarrosserie').value='';
+  document.getElementById('repriseImmat').value='';
+  document.getElementById('editRepriseId').value='';
+  document.getElementById('repriseCarrosserieWrap').style.display='none';
+  openModal('modalNewReprise');
+}
+
+function saveReprise() {
+  var client=document.getElementById('repriseClient').value.trim();
+  var type=document.getElementById('repriseType').value;
+  var carrosserie=document.getElementById('repriseCarrosserie').value.trim();
+  var immat=document.getElementById('repriseImmat').value.trim().toUpperCase();
+  if(!client) { showAlert('Le nom du client est requis.'); return; }
+  if(!type) { showAlert('Veuillez sélectionner le type de véhicule.'); return; }
+  if(!immat) { showAlert("L'immatriculation est requise."); return; }
+  var data={
+    client:client, type_vehicule:type,
+    carrosserie:(type==='Porteur'?carrosserie:null),
+    immat:immat, agent:APP.user,
+    photos:[], created_at:new Date().toISOString()
+  };
+  showLoader('Création...');
+  sb.from('reprises').insert(data).select().then(function(res){
+    if(res.error) throw res.error;
+    return loadReprises();
+  }).then(function(){
+    hideLoader();
+    closeModal('modalNewReprise');
+    renderRepriseList();
+    showToast('Reprise créée');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function renderRepriseList() {
+  var html='';
+  if(APP.reprises.length===0) {
+    html='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Aucune reprise</div><div class="empty-sub">Créez une nouvelle contre-expertise de reprise</div></div>';
+  }
+  for(var i=0;i<APP.reprises.length;i++) {
+    var rp=APP.reprises[i];
+    var signed=!!(rp.signature_client && rp.signature_agent);
+    html+='<div class="card" onclick="openRepriseDetail(\''+rp.id+'\')" style="cursor:pointer">'+
+      '<div class="card-header">'+
+      '<div style="flex:1;min-width:0"><div class="card-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(rp.immat)+' — '+esc(rp.client)+'</div>'+
+      '<div class="card-sub">'+esc(rp.type_vehicule)+(rp.carrosserie?' · '+esc(rp.carrosserie):'')+(signed?' · ✅ Signé':'')+'</div></div></div></div>';
+  }
+  document.getElementById('repriseList').innerHTML=html;
+}
+
+function openRepriseDetail(id) {
+  var rp=null;
+  for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===id) rp=APP.reprises[i];
+  if(!rp) return;
+  document.getElementById('repriseDetailTitle').textContent=esc(rp.immat)+' — Reprise';
+  var signed=!!(rp.signature_client && rp.signature_agent);
+  var html='';
+  html+='<div class="section-title">Informations</div>';
+  html+='<div class="info-row"><span class="info-label">Client</span><span class="info-value">'+esc(rp.client)+'</span></div>';
+  html+='<div class="info-row"><span class="info-label">Type</span><span class="info-value">'+esc(rp.type_vehicule)+'</span></div>';
+  if(rp.carrosserie) html+='<div class="info-row"><span class="info-label">Carrosserie</span><span class="info-value">'+esc(rp.carrosserie)+'</span></div>';
+  html+='<div class="info-row"><span class="info-label">Immatriculation</span><span class="info-value">'+esc(rp.immat)+'</span></div>';
+  html+='<div class="info-row"><span class="info-label">Agent DAF</span><span class="info-value">'+esc(getVendeurDisplay(rp.agent))+'</span></div>';
+
+  // Photos
+  html+='<div class="divider"></div><div class="section-title">Photos de l\'état du véhicule</div>';
+  html+='<div style="font-style:italic;font-size:11px;color:var(--gray);margin:-4px 0 8px">(photographies réalisées en présence du client)</div>';
+  var photos=rp.photos||[];
+  html+='<div class="photo-grid" id="reprisePhotoGrid_'+id+'">';
+  for(var p=0;p<photos.length;p++) {
+    html+='<img class="photo-thumb" src="'+photos[p]+'" onclick="viewPhoto(\''+photos[p]+'\')" alt="">';
+    if(APP.isAdmin) html+='<button onclick="deleteReprisePhoto(\''+id+'\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
+  }
+  if(!signed) {
+    html+='<label class="photo-add" for="upReprisePhoto_'+id+'">+</label>';
+    html+='<input type="file" id="upReprisePhoto_'+id+'" accept="image/*" multiple onchange="uploadReprisePhotos(\''+id+'\',this)">';
+  }
+  html+='</div>';
+
+  // Signatures
+  html+='<div class="divider"></div><div class="section-title">✍️ Signatures</div>';
+  if(!signed) {
+    html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" id="repriseSigLieu_'+id+'" value="'+esc(rp.signature_lieu||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveRepriseLieu(\''+id+'\')"></div>';
+  } else if(rp.signature_lieu) {
+    html+='<div class="info-row"><span class="info-label">Lieu</span><span class="info-value">'+esc(rp.signature_lieu)+'</span></div>';
+  }
+  if(rp.signature_date) html+='<div class="info-row"><span class="info-label">Date / heure</span><span class="info-value">'+formatDateTime(rp.signature_date)+'</span></div>';
+  html+='<div style="display:flex;gap:8px;margin-bottom:8px">';
+  html+='<span class="doc-chip '+(rp.signature_client?'ok':'missing')+'">'+(rp.signature_client?'✅':'⬜')+' Client</span>';
+  html+='<span class="doc-chip '+(rp.signature_agent?'ok':'missing')+'">'+(rp.signature_agent?'✅':'⬜')+' Agent DAF</span>';
+  html+='</div>';
+  if(!signed) {
+    html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+    html+='<button class="btn btn-light" onclick="openRepriseSigPad(\''+id+'\',\'client\')">'+(rp.signature_client?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
+    html+='<button class="btn btn-light" onclick="openRepriseSigPad(\''+id+'\',\'agent\')">'+(rp.signature_agent?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
+    html+='</div>';
+  }
+
+  // PDF
+  html+='<div class="divider"></div>';
+  var pdfStyle=signed?'':'opacity:0.5';
+  html+='<button class="btn btn-primary btn-full" style="'+pdfStyle+';margin-bottom:8px" onclick="genPdfReprise(\''+id+'\')" >📄 Contre-expertise reprise PDF'+(signed?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
+
+  // Suppression (admin ou créateur non signé)
+  var canDel=APP.isAdmin||(rp.agent===APP.user && !signed);
+  if(canDel) html+='<button class="btn btn-danger btn-full" onclick="deleteReprise(\''+id+'\')">🗑️ Supprimer</button>';
+
+  document.getElementById('repriseDetailBody').innerHTML=html;
+  openModal('modalRepriseDetail');
+}
+
+function uploadReprisePhotos(repriseId, input) {
+  var files=input.files; if(!files||!files.length) return;
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  showLoader('Upload photos...');
+  var photos=(rp.photos||[]).slice();
+  var pending=files.length;
+  for(var f=0;f<files.length;f++) {
+    (function(file){
+      var reader=new FileReader();
+      reader.onload=function(e){
+        var path='reprises/'+repriseId+'/photo_'+Date.now()+'_'+Math.random().toString(36).substr(2,4)+'.jpg';
+        uploadToStorage('daf-documents', path, e.target.result).then(function(res){
+          if(res.error) throw res.error;
+          photos.push(getPublicUrl('daf-documents', path));
+          pending--;
+          if(pending===0) {
+            sb.from('reprises').update({photos:photos}).eq('id',repriseId).then(function(){
+              return loadReprises();
+            }).then(function(){
+              hideLoader();
+              openRepriseDetail(repriseId);
+              showToast('Photos ajoutées');
+            });
+          }
+        }).catch(function(e){hideLoader();showToast('Erreur upload');console.error(e);});
+      };
+      reader.readAsDataURL(file);
+    })(files[f]);
+  }
+}
+
+function deleteReprisePhoto(repriseId, index) {
+  if(!confirm('Supprimer cette photo ?')) return;
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  var photos=(rp.photos||[]).slice();
+  var url=photos[index];
+  photos.splice(index,1);
+  showLoader('Suppression...');
+  var storageP=Promise.resolve();
+  if(url) { var path=storagePathFromUrl(url); if(path) storageP=sb.storage.from('daf-documents').remove([path]).catch(function(e){console.error(e);}); }
+  storageP.then(function(){ return sb.from('reprises').update({photos:photos}).eq('id',repriseId); })
+  .then(function(){ return loadReprises(); }).then(function(){
+    hideLoader(); openRepriseDetail(repriseId); showToast('Photo supprimée');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function saveRepriseLieu(repriseId) {
+  var val=document.getElementById('repriseSigLieu_'+repriseId).value.trim()||null;
+  sb.from('reprises').update({signature_lieu:val}).eq('id',repriseId).then(function(){ return loadReprises(); }).catch(function(e){console.error(e);});
+}
+
+var repriseSigPadData={id:null, who:null};
+function openRepriseSigPad(repriseId, who) {
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  if(!rp.signature_lieu) { showAlert('Veuillez renseigner le lieu de signature avant de signer.', '📍'); return; }
+  repriseSigPadData={id:repriseId, who:who};
+  document.getElementById('sigResaId').value=repriseId;
+  document.getElementById('sigType').value='reprise_'+who;
+  document.getElementById('sigWho').value=who;
+  document.querySelector('#modalSignature .modal-title').textContent='Signature '+(who==='client'?'Client':'Agent DAF')+' — Reprise';
+  openModal('modalSignature');
+  setTimeout(function(){
+    var canvas=document.getElementById('sigCanvas');
+    var ratio=Math.max(window.devicePixelRatio||1,1);
+    canvas.width=canvas.offsetWidth*ratio;
+    canvas.height=canvas.offsetHeight*ratio;
+    canvas.getContext('2d').scale(ratio,ratio);
+    if(sigPad) sigPad.clear();
+    sigPad=new SignaturePad(canvas, {backgroundColor:'rgb(255,255,255)'});
+  }, 100);
+}
+
+function saveRepriseSignature(repriseId, who, dataUrl) {
+  var path='reprises/'+repriseId+'/signature_'+who+'_'+Date.now()+'.png';
+  var field=who==='client'?'signature_client':'signature_agent';
+  uploadToStorage('daf-documents', path, dataUrl).then(function(res){
+    if(res.error) throw res.error;
+    var url=getPublicUrl('daf-documents', path);
+    var update={}; update[field]=url;
+    var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+    if(!rp||!rp.signature_date) update.signature_date=new Date().toISOString();
+    return sb.from('reprises').update(update).eq('id',repriseId);
+  }).then(function(){ return loadReprises(); }).then(function(){
+    hideLoader();
+    closeModal('modalSignature');
+    openRepriseDetail(repriseId);
+    showToast('Signature enregistrée');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function deleteReprise(id) {
+  if(!confirm('Supprimer cette reprise ?')) return;
+  showLoader('Suppression...');
+  sb.storage.from('daf-documents').list('reprises/'+id, {limit:1000}).then(function(res){
+    if(res.data && res.data.length>0) {
+      var paths=res.data.map(function(f){return 'reprises/'+id+'/'+f.name;});
+      return sb.storage.from('daf-documents').remove(paths);
+    }
+  }).then(function(){
+    return sb.from('reprises').delete().eq('id',id);
+  }).then(function(){ return loadReprises(); }).then(function(){
+    hideLoader(); closeModal('modalRepriseDetail'); renderRepriseList(); showToast('Reprise supprimée');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function genPdfReprise(repriseId) {
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  if(!rp.signature_client||!rp.signature_agent) {
+    showAlert('Les deux signatures sont requises pour générer le rapport.', '✍️'); return;
+  }
+  showLoader('Génération du PDF...');
+  var jsPDF=window.jspdf.jsPDF;
+  var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  var margin=18, pageW=210, pageH=297, contentW=pageW-2*margin;
+  var COL_BLUE=[0,48,135], COL_ORANGE=[232,96,28], COL_GRAY=[107,114,128], COL_DARK=[30,30,30];
+
+  // En-tête récurrent sur chaque page
+  function addPageHeader() {
+    doc.setFillColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
+    doc.rect(0,0,pageW,18,'F');
+    doc.setFillColor(COL_ORANGE[0],COL_ORANGE[1],COL_ORANGE[2]);
+    doc.rect(0,18,pageW,1.2,'F');
+    doc.setFont(undefined,'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(255,255,255);
+    doc.text('CONTRE EXPERTISE REPRISE', margin, 12);
+    doc.setFont(undefined,'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(255,255,255);
+    var infoLine=rp.client+' · '+rp.type_vehicule+(rp.carrosserie?' · '+rp.carrosserie:'')+' · '+rp.immat;
+    doc.text(infoLine, pageW-margin, 12, {align:'right'});
+  }
+
+  // Numérotation des pages
+  function addPageNumbers() {
+    var total=doc.internal.getNumberOfPages();
+    for(var pg=1;pg<=total;pg++) {
+      doc.setPage(pg);
+      doc.setFont(undefined,'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+      doc.text('Page '+pg+' / '+total, pageW-margin, pageH-8, {align:'right'});
+      doc.setDrawColor(220,224,230);
+      doc.setLineWidth(0.3);
+      doc.line(margin,pageH-12,pageW-margin,pageH-12);
+    }
+  }
+
+  function sectionBoxR(label, yPos) {
+    doc.setFillColor(COL_BLUE[0],COL_BLUE[1],COL_BLUE[2]);
+    doc.rect(margin, yPos, contentW, 8, 'F');
+    doc.setFont(undefined,'bold');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(9);
+    doc.text(label, margin+3, yPos+5.5);
+    return yPos+12;
+  }
+
+  function fieldLineR(label, value, yPos, xOff) {
+    doc.setFont(undefined,'bold');
+    doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+    doc.setFontSize(7.5);
+    doc.text(label, margin+xOff, yPos);
+    doc.setFont(undefined,'normal');
+    doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+    doc.setFontSize(9.5);
+    doc.text(value||'—', margin+xOff, yPos+4);
+  }
+
+  addPageHeader();
+  var y=26;
+
+  // Infos client & véhicule
+  y=sectionBoxR('INFORMATIONS', y);
+  fieldLineR('NOM DU CLIENT', rp.client, y, 0);
+  fieldLineR('TYPE DE VÉHICULE', rp.type_vehicule, y, contentW/3);
+  if(rp.carrosserie) fieldLineR('CARROSSERIE', rp.carrosserie, y, (contentW/3)*2);
+  y+=11;
+  fieldLineR('IMMATRICULATION', rp.immat, y, 0);
+  fieldLineR('AGENT DAF TRUCKS', getVendeurDisplay(rp.agent), y, contentW/2);
+  y+=11;
+
+  // Photos
+  var photos=rp.photos||[];
+  if(photos.length>0) {
+    y=sectionBoxR('ÉTAT DU VÉHICULE — PHOTOS', y);
+    doc.setFont(undefined,'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+    doc.text('(photographies réalisées en présence du client)', margin, y);
+    y+=6;
+
+    var photoCols=2;
+    var cellW=(contentW-3)/photoCols;
+    var loadP=photos.map(function(url){
+      return fetch(url).then(function(r){return r.blob();}).then(function(blob){
+        return new Promise(function(resolve){
+          var rd=new FileReader();
+          rd.onload=function(e){
+            var img=new Image();
+            img.onload=function(){resolve({data:e.target.result,ratio:img.naturalWidth/img.naturalHeight});};
+            img.onerror=function(){resolve(null);};
+            img.src=e.target.result;
+          };
+          rd.readAsDataURL(blob);
+        });
+      }).catch(function(){return null;});
+    });
+
+    return Promise.all(loadP).then(function(imgInfos){
+      var col=0, rowMaxH=0, rowStart=y, rowItems=[];
+      function flushRowR(){
+        if(!rowItems.length) return;
+        rowItems.forEach(function(it,ci){ if(it.data) { try { doc.addImage(it.data,'JPEG',margin+ci*(cellW+3),rowStart,cellW,it.h); } catch(e){} } });
+        y=rowStart+rowMaxH+3; col=0; rowMaxH=0; rowStart=y; rowItems=[];
+      }
+      for(var i=0;i<imgInfos.length;i++){
+        if(!imgInfos[i]) continue;
+        if(y+cellW/imgInfos[i].ratio>pageH-margin-20) { flushRowR(); doc.addPage(); addPageHeader(); y=26; rowStart=y; }
+        var h=Math.min(cellW/imgInfos[i].ratio, 80);
+        rowItems.push({data:imgInfos[i].data,h:h});
+        rowMaxH=Math.max(rowMaxH,h);
+        if(rowItems.length>=photoCols) flushRowR();
+      }
+      flushRowR();
+
+      // Signatures
+      if(y+50>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
+      y=sectionBoxR('SIGNATURES', y);
+
+      function loadImg(url){ return fetch(url).then(function(r){return r.blob();}).then(function(b){return new Promise(function(res){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.readAsDataURL(b);});}); }
+
+      return Promise.all([
+        rp.signature_client?loadImg(rp.signature_client):Promise.resolve(null),
+        rp.signature_agent?loadImg(rp.signature_agent):Promise.resolve(null)
+      ]).then(function(sigs){
+        var colGap=6, colW=(contentW-colGap)/2, sigH=28;
+        if(y+sigH+20>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
+
+        // Bloc client
+        doc.setFont(undefined,'bold');
+        doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+        doc.setFontSize(8);
+        doc.text('SIGNATURE CLIENT', margin, y);
+        doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+        doc.setFontSize(9.5);
+        doc.text(rp.client||'—', margin, y+4.5);
+        try { doc.setDrawColor(220,224,230); doc.setLineWidth(0.3); doc.rect(margin,y+7,colW,sigH); if(sigs[0]) doc.addImage(sigs[0],'PNG',margin,y+7,colW,sigH); } catch(e){}
+
+        // Bloc agent
+        doc.setFont(undefined,'bold');
+        doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+        doc.setFontSize(8);
+        doc.text('SIGNATURE AGENT DAF TRUCKS', margin+colW+colGap, y);
+        doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+        doc.setFontSize(9.5);
+        doc.text(getVendeurDisplay(rp.agent)||'—', margin+colW+colGap, y+4.5);
+        try { doc.setDrawColor(220,224,230); doc.setLineWidth(0.3); doc.rect(margin+colW+colGap,y+7,colW,sigH); if(sigs[1]) doc.addImage(sigs[1],'PNG',margin+colW+colGap,y+7,colW,sigH); } catch(e){}
+
+        y+=sigH+8;
+
+        // Lieu et date
+        if(rp.signature_lieu||rp.signature_date) {
+          var parts=[];
+          if(rp.signature_lieu) parts.push('Fait à '+rp.signature_lieu);
+          if(rp.signature_date) parts.push('le '+formatDateTime(rp.signature_date));
+          doc.setFont(undefined,'normal');
+          doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+          doc.setFontSize(8);
+          doc.text(parts.join(', '), margin, y);
+          y+=5;
+        }
+
+        // Mention légale
+        var disclaimer='PAR SA SIGNATURE, LE CLIENT RECONNAIT L\'EXACTITUDE DES INFORMATIONS MENTIONNÉES SUR CE DOCUMENT.';
+        doc.setFont(undefined,'bolditalic');
+        doc.setTextColor(220,38,38);
+        doc.setFontSize(7.5);
+        var dlLines=doc.splitTextToSize(disclaimer, contentW);
+        doc.text(dlLines, margin, y+3);
+
+        addPageNumbers();
+        hideLoader();
+        doc.save('contre_expertise_reprise_'+rp.immat+'_'+rp.client.replace(/\s/g,'_')+'.pdf');
+        showToast('PDF généré');
+      });
+    });
+  } else {
+    // Pas de photos, juste les signatures
+    if(y+60>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
+    addPageNumbers();
+    hideLoader();
+    doc.save('contre_expertise_reprise_'+rp.immat+'.pdf');
+    showToast('PDF généré (sans photos)');
+    return;
+  }
+}
+
+// =============================================
 // VÉHICULES
 // =============================================
 function renderVehicleList() {
@@ -3641,7 +4157,7 @@ function updateStorageBar() {
 // =============================================
 // INIT
 // =============================================
-var overlayIds=['modalNewResa','modalResaDetail','modalVehicle','modalVehicleDocs','modalVehicleHistory','modalArchive','modalSignature','modalVendor'];
+var overlayIds=['modalNewResa','modalResaDetail','modalVehicle','modalVehicleDocs','modalVehicleHistory','modalArchive','modalSignature','modalVendor','modalNewReprise','modalRepriseDetail'];
 for(var oi=0;oi<overlayIds.length;oi++) {
   (function(id){
     document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});
