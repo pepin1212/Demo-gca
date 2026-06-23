@@ -166,6 +166,7 @@ input, select, textarea { font-size: 16px !important; }
 .phase-block { border-radius: var(--radius); padding: 14px 12px; margin-bottom: 4px; }
 .phase-block-depart { background: rgba(59,130,246,0.07); }
 .phase-block-retour { background: rgba(239,68,68,0.06); }
+.phase-locked input, .phase-locked select, .phase-locked textarea, .phase-locked button, .phase-locked label { pointer-events: none !important; opacity: 0.6; }
 .phase-title-depart { color: #1D4ED8; }
 .phase-title-retour { color: #B91C1C; }
 .divider { height: 1px; background: #CBD5E1; margin: 16px 0; }
@@ -1291,7 +1292,7 @@ function openResaDetail(id) {
 
   // ===================== BLOC DÉPART =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-depart"'+(canEditDepart?'':' style="pointer-events:none;opacity:0.7"')+'>';
+  html+='<div class="phase-block phase-block-depart'+(canEditDepart?'':' phase-locked')+'"'+(canEditDepart?'':' style="opacity:0.85"')+'>';
   html+='<div class="phase-title phase-title-depart">🚗 DÉPART</div>';
   if(!canEditDepart) {
     html+='<div style="background:rgba(59,130,246,0.12);border-radius:8px;padding:8px 10px;font-size:12px;color:#1D4ED8;margin-bottom:10px">🔒 Départ signé — modification impossible. Contactez l\'administrateur.</div>';
@@ -1349,7 +1350,7 @@ function openResaDetail(id) {
 
   // ===================== BLOC RETOUR =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-retour"'+(canEditRetour?'':' style="pointer-events:none;opacity:0.7"')+'>';
+  html+='<div class="phase-block phase-block-retour'+(canEditRetour?'':' phase-locked')+'"'+(canEditRetour?'':' style="opacity:0.85"')+'>';
   html+='<div class="phase-title phase-title-retour">🏁 RETOUR</div>';
   if(!canEditRetour) {
     html+='<div style="background:rgba(239,68,68,0.08);border-radius:8px;padding:8px 10px;font-size:12px;color:#B91C1C;margin-bottom:10px">🔒 Retour signé — modification impossible. Contactez l\'administrateur.</div>';
@@ -1434,6 +1435,7 @@ function openResaDetail(id) {
 
   // Actions
   html+='<div class="divider"></div>';
+  html+='<div style="pointer-events:all">';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
   var departSigned=!!(r.signature_depart && r.signature_vendeur_depart);
   var retourSigned=!!(r.signature_retour && r.signature_vendeur_retour);
@@ -1458,6 +1460,8 @@ function openResaDetail(id) {
   if(isOwner && !departLocked) html+='<button class="btn btn-light" style="flex:1" onclick="editResa(\''+id+'\')">✏️ Modifier</button>';
   if(canDeleteResa) html+='<button class="btn btn-danger" style="flex:1" onclick="deleteResa(\''+id+'\')">🗑️ Supprimer</button>';
   html+='</div>';
+
+  html+='</div>'; // fin pointer-events:all wrapper
 
   document.getElementById('detailBody').innerHTML=html;
   openModal('modalResaDetail');
