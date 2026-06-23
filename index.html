@@ -166,7 +166,6 @@ input, select, textarea { font-size: 16px !important; }
 .phase-block { border-radius: var(--radius); padding: 14px 12px; margin-bottom: 4px; }
 .phase-block-depart { background: rgba(59,130,246,0.07); }
 .phase-block-retour { background: rgba(239,68,68,0.06); }
-.phase-locked input, .phase-locked select, .phase-locked textarea, .phase-locked button, .phase-locked label { pointer-events: none !important; opacity: 0.6; }
 .phase-title-depart { color: #1D4ED8; }
 .phase-title-retour { color: #B91C1C; }
 .divider { height: 1px; background: #CBD5E1; margin: 16px 0; }
@@ -1292,7 +1291,8 @@ function openResaDetail(id) {
 
   // ===================== BLOC DÉPART =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-depart'+(canEditDepart?'':' phase-locked')+'"'+(canEditDepart?'':' style="opacity:0.85"')+'>';
+  html+='<div class="phase-block phase-block-depart"'+(canEditDepart?'':' style="opacity:0.7;position:relative"')+'>';
+  if(!canEditDepart) html+='<div style="position:absolute;inset:0;z-index:10;border-radius:var(--radius)"></div>';
   html+='<div class="phase-title phase-title-depart">🚗 DÉPART</div>';
   if(!canEditDepart) {
     html+='<div style="background:rgba(59,130,246,0.12);border-radius:8px;padding:8px 10px;font-size:12px;color:#1D4ED8;margin-bottom:10px">🔒 Départ signé — modification impossible. Contactez l\'administrateur.</div>';
@@ -1350,7 +1350,8 @@ function openResaDetail(id) {
 
   // ===================== BLOC RETOUR =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-retour'+(canEditRetour?'':' phase-locked')+'"'+(canEditRetour?'':' style="opacity:0.85"')+'>';
+  html+='<div class="phase-block phase-block-retour"'+(canEditRetour?'':' style="opacity:0.7;position:relative"')+'>';
+  if(!canEditRetour) html+='<div style="position:absolute;inset:0;z-index:10;border-radius:var(--radius)"></div>';
   html+='<div class="phase-title phase-title-retour">🏁 RETOUR</div>';
   if(!canEditRetour) {
     html+='<div style="background:rgba(239,68,68,0.08);border-radius:8px;padding:8px 10px;font-size:12px;color:#B91C1C;margin-bottom:10px">🔒 Retour signé — modification impossible. Contactez l\'administrateur.</div>';
@@ -1435,14 +1436,19 @@ function openResaDetail(id) {
 
   // Actions
   html+='<div class="divider"></div>';
-  html+='<div style="pointer-events:all">';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
   var departSigned=!!(r.signature_depart && r.signature_vendeur_depart);
   var retourSigned=!!(r.signature_retour && r.signature_vendeur_retour);
-  var departBtnStyle=departSigned?'':'opacity:0.5';
-  var retourBtnStyle=retourSigned?'':'opacity:0.5';
-  html+='<button class="btn btn-primary" style="'+departBtnStyle+'" onclick="genPdfDepart(\''+id+'\')">📄 Départ PDF'+(departSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
-  html+='<button class="btn btn-orange" style="'+retourBtnStyle+'" onclick="genPdfRetour(\''+id+'\')">📄 Retour PDF'+(retourSigned?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+  if(departSigned) {
+    html+='<button class="btn btn-primary" onclick="genPdfDepart(\''+id+'\')">📄 Départ PDF ✅</button>';
+  } else {
+    html+='<button class="btn btn-light" style="font-size:11px;color:var(--gray)" disabled>📄 Départ PDF<br><span style="font-size:10px">Signatures requises</span></button>';
+  }
+  if(retourSigned) {
+    html+='<button class="btn btn-orange" onclick="genPdfRetour(\''+id+'\')">📄 Retour PDF ✅</button>';
+  } else {
+    html+='<button class="btn btn-light" style="font-size:11px;color:var(--gray)" disabled>📄 Retour PDF<br><span style="font-size:10px">Signatures requises</span></button>';
+  }
   html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:8px">';
   html+='<button class="btn btn-light btn-sm" onclick="downloadAllPhotos(\''+id+'\',\'depart\')">📷 Départ</button>';
@@ -1460,8 +1466,6 @@ function openResaDetail(id) {
   if(isOwner && !departLocked) html+='<button class="btn btn-light" style="flex:1" onclick="editResa(\''+id+'\')">✏️ Modifier</button>';
   if(canDeleteResa) html+='<button class="btn btn-danger" style="flex:1" onclick="deleteResa(\''+id+'\')">🗑️ Supprimer</button>';
   html+='</div>';
-
-  html+='</div>'; // fin pointer-events:all wrapper
 
   document.getElementById('detailBody').innerHTML=html;
   openModal('modalResaDetail');
@@ -1611,38 +1615,44 @@ function downloadResaDoc(resaId, docKey, index) {
 function uploadPhotos(resaId, type, input) {
   var files=input.files; if(!files||files.length===0) return;
   var r=getResa(resaId); if(!r) return;
-  showLoader('Upload photos...');
   var key=type==='depart'?'photos_depart':(type==='retour'?'photos_retour':'photos_degradation');
-  var existing=r[key]||[];
-  var remaining=files.length;
+  var existing=(r[key]||[]).slice();
+  var fileArr=[];
+  for(var i=0;i<files.length;i++) fileArr.push(files[i]);
+
+  showLoader('Upload 1 / '+fileArr.length+'...');
+  var index=0;
   var newItems=[];
 
-  for(var i=0;i<files.length;i++) {
-    (function(file){
-      compressPhoto(file, function(base64){
-        var path='reservations/'+resaId+'/'+type+'_'+Date.now()+'_'+Math.random().toString(36).substr(2,4)+'.jpg';
-        uploadToStorage('daf-documents', path, base64).then(function(res){
-          if(res.error) throw res.error;
-          var url=getPublicUrl('daf-documents', path);
-          newItems.push(type==='degradation'?{url:url,note:''}:url);
-          remaining--;
-          if(remaining===0) {
-            var allItems=existing.concat(newItems);
-            var update={}; update[key]=allItems;
-            return sb.from('reservations').update(update).eq('id',resaId).then(function(res2){
-              if(res2.error) throw res2.error;
-              return loadReservations();
-            }).then(function(){
-              if(type==='retour'||type==='degradation') autoSetVendeurRetour(resaId);
-              hideLoader();
-              openResaDetail(resaId);
-              showToast('Photo(s) ajoutée(s)');
-            });
-          }
-        }).catch(function(e){hideLoader();showToast('Erreur photo: '+(e.message||JSON.stringify(e)));console.error('uploadPhotos error:',e);});
-      });
-    })(files[i]);
+  function uploadNext() {
+    if(index>=fileArr.length) {
+      var allItems=existing.concat(newItems);
+      var update={}; update[key]=allItems;
+      sb.from('reservations').update(update).eq('id',resaId).then(function(res2){
+        if(res2.error) throw res2.error;
+        return loadReservations();
+      }).then(function(){
+        if(type==='retour'||type==='degradation') autoSetVendeurRetour(resaId);
+        hideLoader();
+        openResaDetail(resaId);
+        showToast(fileArr.length+' photo(s) ajoutée(s)');
+      }).catch(function(e){hideLoader();showAlert('Erreur sauvegarde : '+(e.message||''));console.error(e);});
+      return;
+    }
+    showLoader('Compression et upload '+(index+1)+' / '+fileArr.length+'...');
+    var file=fileArr[index];
+    compressPhoto(file, function(base64){
+      var path='reservations/'+resaId+'/'+type+'_'+Date.now()+'_'+Math.random().toString(36).substr(2,4)+'.jpg';
+      uploadToStorage('daf-documents', path, base64).then(function(res){
+        if(res.error) throw res.error;
+        var url=getPublicUrl('daf-documents', path);
+        newItems.push(type==='degradation'?{url:url,note:''}:url);
+        index++;
+        uploadNext();
+      }).catch(function(e){hideLoader();showAlert('Erreur photo '+(index+1)+' : '+(e.message||JSON.stringify(e)),'⚠️');console.error(e);});
+    });
   }
+  uploadNext();
 }
 
 // Construit un champ "pourcentage + jauge animée" pour carburant/AdBlue
@@ -2153,12 +2163,12 @@ function downloadZip(resaId, scope) {
 // =============================================
 function genPdfDepart(resaId) {
   var r=getResa(resaId); if(!r) return;
-  // Si les deux signatures sont présentes, générer directement (plus rien à bloquer)
-  if(r.signature_depart && r.signature_vendeur_depart) {
+  // Si au moins une signature de départ existe, permettre la génération
+  if(r.signature_depart || r.signature_vendeur_depart) {
     genPdfConfirmation(resaId, 'depart');
     return;
   }
-  // Vérifications pré-signature
+  // Vérifications pré-signature uniquement si aucune signature encore
   var hasPermis=!!r.permis_verifie || getDocFiles(r,'doc_'+slugify('Permis Chauffeur')).length>0;
   var hasAssurance=!!r.assurance_verifiee || getDocFiles(r,'doc_'+slugify('Assurance')).length>0;
   var hasContrat=!!r.contrat_verifie || getDocFiles(r,'doc_'+slugify('Contrat de Prêt')).length>0;
@@ -2166,25 +2176,17 @@ function genPdfDepart(resaId) {
     showAlert('Le Permis de conduire, le Mémo assurance et le Contrat de prêt doivent être téléversés ou cochés avant de générer le rapport de départ.', '📋');
     return;
   }
-  if(!r.signature_depart || !r.signature_vendeur_depart) {
-    showAlert('Les deux signatures (client et agent DAF Trucks) sont requises pour générer le rapport de départ.', '✍️');
-    return;
-  }
-  genPdfConfirmation(resaId, 'depart');
+  showAlert('Les deux signatures (client et agent DAF Trucks) sont requises pour générer le rapport de départ.', '✍️');
 }
 
 function genPdfRetour(resaId) {
   var r=getResa(resaId); if(!r) return;
-  // Si les deux signatures sont présentes, générer directement
-  if(r.signature_retour && r.signature_vendeur_retour) {
+  // Si au moins une signature de retour existe, permettre la génération
+  if(r.signature_retour || r.signature_vendeur_retour) {
     genPdfConfirmation(resaId, 'retour');
     return;
   }
-  if(!r.signature_retour || !r.signature_vendeur_retour) {
-    showAlert('Les deux signatures (client et agent DAF Trucks) sont requises pour générer le rapport de retour.', '✍️');
-    return;
-  }
-  genPdfConfirmation(resaId, 'retour');
+  showAlert('Les deux signatures (client et agent DAF Trucks) sont requises pour générer le rapport de retour.', '✍️');
 }
 
 function genPdfConfirmation(resaId, type, outputMode) {
@@ -3406,32 +3408,44 @@ function uploadReprisePhotos(repriseId, input) {
   var files=input.files; if(!files||!files.length) return;
   var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
   if(!rp) return;
-  showLoader('Upload photos...');
+
   var photos=(rp.photos||[]).slice();
-  var pending=files.length;
-  for(var f=0;f<files.length;f++) {
-    (function(file){
-      var reader=new FileReader();
-      reader.onload=function(e){
-        var path='reprises/'+repriseId+'/photo_'+Date.now()+'_'+Math.random().toString(36).substr(2,4)+'.jpg';
-        uploadToStorage('daf-documents', path, e.target.result).then(function(res){
-          if(res.error) throw res.error;
-          photos.push(getPublicUrl('daf-documents', path));
-          pending--;
-          if(pending===0) {
-            sb.from('reprises').update({photos:photos}).eq('id',repriseId).then(function(){
-              return loadReprises();
-            }).then(function(){
-              hideLoader();
-              openRepriseDetail(repriseId);
-              showToast('Photos ajoutées');
-            });
-          }
-        }).catch(function(e){hideLoader();showToast('Erreur upload');console.error(e);});
-      };
-      reader.readAsDataURL(file);
-    })(files[f]);
+  var fileArr=[];
+  for(var i=0;i<files.length;i++) fileArr.push(files[i]);
+
+  showLoader('Upload 1 / '+fileArr.length+'...');
+
+  // Upload séquentiel : une photo à la fois pour éviter les timeouts sur mobile
+  var index=0;
+  function uploadNext() {
+    if(index>=fileArr.length) {
+      // Tout uploadé — sauvegarder en base
+      sb.from('reprises').update({photos:photos}).eq('id',repriseId).then(function(){
+        return loadReprises();
+      }).then(function(){
+        hideLoader();
+        openRepriseDetail(repriseId);
+        showToast(fileArr.length+' photo(s) ajoutée(s)');
+      }).catch(function(e){hideLoader();showAlert('Erreur sauvegarde : '+(e.message||''));console.error(e);});
+      return;
+    }
+    var file=fileArr[index];
+    showLoader('Compression et upload '+(index+1)+' / '+fileArr.length+'...');
+    compressPhoto(file, function(base64){
+      var path='reprises/'+repriseId+'/photo_'+Date.now()+'_'+Math.random().toString(36).substr(2,4)+'.jpg';
+      uploadToStorage('daf-documents', path, base64).then(function(res){
+        if(res.error) throw res.error;
+        photos.push(getPublicUrl('daf-documents', path));
+        index++;
+        uploadNext();
+      }).catch(function(e){
+        hideLoader();
+        showAlert('Erreur upload photo '+(index+1)+' : '+(e.message||JSON.stringify(e)), '⚠️');
+        console.error(e);
+      });
+    });
   }
+  uploadNext();
 }
 
 function deleteReprisePhoto(repriseId, index) {
