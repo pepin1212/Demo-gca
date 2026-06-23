@@ -2149,6 +2149,12 @@ function downloadZip(resaId, scope) {
 // =============================================
 function genPdfDepart(resaId) {
   var r=getResa(resaId); if(!r) return;
+  // Si les deux signatures sont présentes, générer directement (plus rien à bloquer)
+  if(r.signature_depart && r.signature_vendeur_depart) {
+    genPdfConfirmation(resaId, 'depart');
+    return;
+  }
+  // Vérifications pré-signature
   var hasPermis=!!r.permis_verifie || getDocFiles(r,'doc_'+slugify('Permis Chauffeur')).length>0;
   var hasAssurance=!!r.assurance_verifiee || getDocFiles(r,'doc_'+slugify('Assurance')).length>0;
   var hasContrat=!!r.contrat_verifie || getDocFiles(r,'doc_'+slugify('Contrat de Prêt')).length>0;
@@ -2165,6 +2171,11 @@ function genPdfDepart(resaId) {
 
 function genPdfRetour(resaId) {
   var r=getResa(resaId); if(!r) return;
+  // Si les deux signatures sont présentes, générer directement
+  if(r.signature_retour && r.signature_vendeur_retour) {
+    genPdfConfirmation(resaId, 'retour');
+    return;
+  }
   if(!r.signature_retour || !r.signature_vendeur_retour) {
     showAlert('Les deux signatures (client et agent DAF Trucks) sont requises pour générer le rapport de retour.', '✍️');
     return;
@@ -3287,10 +3298,12 @@ function saveReprise() {
   if(!type) { showAlert('Veuillez sélectionner le type de véhicule.'); return; }
   if(!immat) { showAlert("L'immatriculation est requise."); return; }
   var data={
-    client:client, type_vehicule:type,
-    carrosserie:(type==='Porteur'?carrosserie:null),
-    immat:immat, agent:APP.user,
-    photos:[], created_at:new Date().toISOString()
+    client:client,
+    type_vehicule:type,
+    carrosserie:(type==='Porteur'&&carrosserie?carrosserie:null),
+    immat:immat,
+    agent:APP.user,
+    photos:[]
   };
   showLoader('Création...');
   sb.from('reprises').insert(data).select().then(function(res){
@@ -3301,7 +3314,11 @@ function saveReprise() {
     closeModal('modalNewReprise');
     renderRepriseList();
     showToast('Reprise créée');
-  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+  }).catch(function(e){
+    hideLoader();
+    showAlert('Erreur création reprise : '+(e.message||e.details||JSON.stringify(e)), '⚠️');
+    console.error(e);
+  });
 }
 
 function renderRepriseList() {
