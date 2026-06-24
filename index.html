@@ -1289,10 +1289,12 @@ function openResaDetail(id) {
     html+='</div>';
   }
 
+  var dD=canEditDepart?'':'disabled'; // disabled attr pour champs DÉPART
+  var dR=canEditRetour?'':'disabled'; // disabled attr pour champs RETOUR
+
   // ===================== BLOC DÉPART =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-depart"'+(canEditDepart?'':' style="opacity:0.7;position:relative"')+'>';
-  if(!canEditDepart) html+='<div style="position:absolute;inset:0;z-index:10;border-radius:var(--radius)"></div>';
+  html+='<div class="phase-block phase-block-depart"'+(canEditDepart?'':' style="opacity:0.7"')+'>';
   html+='<div class="phase-title phase-title-depart">🚗 DÉPART</div>';
   if(!canEditDepart) {
     html+='<div style="background:rgba(59,130,246,0.12);border-radius:8px;padding:8px 10px;font-size:12px;color:#1D4ED8;margin-bottom:10px">🔒 Départ signé — modification impossible. Contactez l\'administrateur.</div>';
@@ -1300,19 +1302,19 @@ function openResaDetail(id) {
 
   // Chauffeur / état des lieux départ
   html+='<div class="section-title">Chauffeur (état des lieux départ)</div>';
-  html+='<div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="drvNom_'+id+'" value="'+esc(r.chauffeur_nom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" '+dD+' id="drvNom_'+id+'" value="'+esc(r.chauffeur_nom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" id="drvPrenom_'+id+'" value="'+esc(r.chauffeur_prenom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
-  html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" id="drvTel_'+id+'" value="'+esc(r.chauffeur_telephone||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" '+dD+' id="drvPrenom_'+id+'" value="'+esc(r.chauffeur_prenom||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" '+dD+' id="drvTel_'+id+'" value="'+esc(r.chauffeur_telephone||'')+'" onchange="saveDriverInfo(\''+id+'\')"></div>';
   html+='</div>';
 
   // Kilométrage — départ
   html+='<div class="divider"></div><div class="section-title">🔢 Kilométrage</div>';
-  html+='<div class="form-group"><label class="form-label">Départ (km)</label><input type="number" class="form-input" id="kmDepart_'+id+'" value="'+(r.km_depart!=null?r.km_depart:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Départ (km)</label><input type="number" class="form-input" '+dD+' id="kmDepart_'+id+'" value="'+(r.km_depart!=null?r.km_depart:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
 
   // Horaires — départ
   html+='<div class="divider"></div><div class="section-title">🕒 Horaires</div>';
-  html+='<div class="form-group"><label class="form-label">Heure de départ</label><input type="time" class="form-input" id="heureDepart_'+id+'" value="'+(r.heure_depart||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Heure de départ</label><input type="time" class="form-input" '+dD+' id="heureDepart_'+id+'" value="'+(r.heure_depart||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
 
   // Niveaux Carburant & AdBlue — départ
   html+='<div class="divider"></div><div class="section-title">⛽ Carburant & AdBlue</div>';
@@ -1335,7 +1337,7 @@ function openResaDetail(id) {
 
   // Signatures — Départ
   html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Départ</div>';
-  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" id="sigLieuDepart_'+id+'" value="'+esc(r.signature_lieu_depart||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'depart\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" '+dD+' id="sigLieuDepart_'+id+'" value="'+esc(r.signature_lieu_depart||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'depart\')"></div>';
   if(r.signature_date_depart) {
     html+='<div class="info-row"><span class="info-label">Date / heure de signature</span><span class="info-value">'+formatDateTime(r.signature_date_depart)+'</span></div>';
   }
@@ -1344,14 +1346,13 @@ function openResaDetail(id) {
   html+='<span class="doc-chip '+(r.signature_vendeur_depart?'ok':'missing')+'">'+(r.signature_vendeur_depart?'✅':'⬜')+' Agent DAF</span>';
   html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'client\')">'+(r.signature_depart?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
+  html+='<button class="btn btn-light" '+dD+' onclick="openSignaturePad(\''+id+'\',\'depart\',\'client\')">'+(r.signature_depart?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
+  html+='<button class="btn btn-light" '+dD+' onclick="openSignaturePad(\''+id+'\',\'depart\',\'vendeur\')">'+(r.signature_vendeur_depart?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
   html+='</div>'; // fin phase-block-depart
 
   // ===================== BLOC RETOUR =====================
   html+='<div class="divider"></div>';
-  html+='<div class="phase-block phase-block-retour"'+(canEditRetour?'':' style="opacity:0.7;position:relative"')+'>';
-  if(!canEditRetour) html+='<div style="position:absolute;inset:0;z-index:10;border-radius:var(--radius)"></div>';
+  html+='<div class="phase-block phase-block-retour"'+(canEditRetour?'':' style="opacity:0.7"')+'>';
   html+='<div class="phase-title phase-title-retour">🏁 RETOUR</div>';
   if(!canEditRetour) {
     html+='<div style="background:rgba(239,68,68,0.08);border-radius:8px;padding:8px 10px;font-size:12px;color:#B91C1C;margin-bottom:10px">🔒 Retour signé — modification impossible. Contactez l\'administrateur.</div>';
@@ -1364,22 +1365,22 @@ function openResaDetail(id) {
   var chRetourPrenom=(r.chauffeur_retour_prenom!=null)?r.chauffeur_retour_prenom:(r.chauffeur_prenom||'');
   var chRetourTel=(r.chauffeur_retour_telephone!=null)?r.chauffeur_retour_telephone:(r.chauffeur_telephone||'');
   html+='<div class="section-title">Chauffeur (état des lieux retour)</div>';
-  html+='<div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" id="drvNomRetour_'+id+'" value="'+esc(chRetourNom)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Nom</label><input type="text" class="form-input" '+dR+' id="drvNomRetour_'+id+'" value="'+esc(chRetourNom)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">';
-  html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" id="drvPrenomRetour_'+id+'" value="'+esc(chRetourPrenom)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
-  html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" id="drvTelRetour_'+id+'" value="'+esc(chRetourTel)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Prénom</label><input type="text" class="form-input" '+dR+' id="drvPrenomRetour_'+id+'" value="'+esc(chRetourPrenom)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
+  html+='<div><label class="form-label">Téléphone</label><input type="tel" class="form-input" '+dR+' id="drvTelRetour_'+id+'" value="'+esc(chRetourTel)+'" onchange="saveDriverInfoRetour(\''+id+'\')"></div>';
   html+='</div>';
 
   // Kilométrage — retour
   html+='<div class="section-title">🔢 Kilométrage</div>';
-  html+='<div class="form-group"><label class="form-label">Retour (km)</label><input type="number" class="form-input" id="kmRetour_'+id+'" value="'+(r.km_retour!=null?r.km_retour:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Retour (km)</label><input type="number" class="form-input" '+dR+' id="kmRetour_'+id+'" value="'+(r.km_retour!=null?r.km_retour:'')+'" placeholder="0" onchange="saveKilometrage(\''+id+'\')"></div>';
   if(r.km_depart!=null && r.km_retour!=null && r.km_retour>=r.km_depart) {
     html+='<div class="info-row"><span class="info-label">Distance parcourue</span><span class="info-value">'+(r.km_retour-r.km_depart).toLocaleString('fr-FR')+' km</span></div>';
   }
 
   // Horaires — retour
   html+='<div class="divider"></div><div class="section-title">🕒 Horaires</div>';
-  html+='<div class="form-group"><label class="form-label">Heure de retour</label><input type="time" class="form-input" id="heureRetour_'+id+'" value="'+(r.heure_retour||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Heure de retour</label><input type="time" class="form-input" '+dR+' id="heureRetour_'+id+'" value="'+(r.heure_retour||'')+'" onchange="saveHoraires(\''+id+'\')"></div>';
 
   // Niveaux Carburant & AdBlue — retour
   html+='<div class="divider"></div><div class="section-title">⛽ Carburant & AdBlue</div>';
@@ -1419,7 +1420,7 @@ function openResaDetail(id) {
 
   // Signatures — Retour
   html+='<div class="divider"></div><div class="section-title">✍️ Signatures — Retour</div>';
-  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" id="sigLieuRetour_'+id+'" value="'+esc(r.signature_lieu_retour||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'retour\')"></div>';
+  html+='<div class="form-group"><label class="form-label">Lieu de signature</label><input type="text" class="form-input" '+dR+' id="sigLieuRetour_'+id+'" value="'+esc(r.signature_lieu_retour||'')+'" placeholder="ex: Concession GCA Marseille" onchange="saveSignatureLieu(\''+id+'\',\'retour\')"></div>';
   if(r.signature_date_retour) {
     html+='<div class="info-row"><span class="info-label">Date / heure de signature</span><span class="info-value">'+formatDateTime(r.signature_date_retour)+'</span></div>';
   }
@@ -1428,8 +1429,8 @@ function openResaDetail(id) {
   html+='<span class="doc-chip '+(r.signature_vendeur_retour?'ok':'missing')+'">'+(r.signature_vendeur_retour?'✅':'⬜')+' Agent DAF</span>';
   html+='</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'client\')">'+(r.signature_retour?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
-  html+='<button class="btn btn-light" onclick="openSignaturePad(\''+id+'\',\'retour\',\'vendeur\')">'+(r.signature_vendeur_retour?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
+  html+='<button class="btn btn-light" '+dR+' onclick="openSignaturePad(\''+id+'\',\'retour\',\'client\')">'+(r.signature_retour?'✍️ Re-signer (client)':'✍️ Signer (client)')+'</button>';
+  html+='<button class="btn btn-light" '+dR+' onclick="openSignaturePad(\''+id+'\',\'retour\',\'vendeur\')">'+(r.signature_vendeur_retour?'✍️ Re-signer (agent)':'✍️ Signer (agent DAF)')+'</button>';
   html+='</div>';
 
   html+='</div>'; // fin phase-block-retour
@@ -3612,8 +3613,6 @@ function genPdfReprise(repriseId) {
     doc.text('(photographies réalisées en présence du client)', margin, y);
     y+=6;
 
-    var photoCols=2;
-    var cellW=(contentW-3)/photoCols;
     var loadP=photos.map(function(url){
       return fetch(url).then(function(r){return r.blob();}).then(function(blob){
         return new Promise(function(resolve){
@@ -3630,21 +3629,20 @@ function genPdfReprise(repriseId) {
     });
 
     return Promise.all(loadP).then(function(imgInfos){
-      var col=0, rowMaxH=0, rowStart=y, rowItems=[];
-      function flushRowR(){
-        if(!rowItems.length) return;
-        rowItems.forEach(function(it,ci){ if(it.data) { try { doc.addImage(it.data,'JPEG',margin+ci*(cellW+3),rowStart,cellW,it.h); } catch(e){} } });
-        y=rowStart+rowMaxH+3; col=0; rowMaxH=0; rowStart=y; rowItems=[];
-      }
+      // Une photo par ligne pour préserver les dimensions — pas de grille forcée
       for(var i=0;i<imgInfos.length;i++){
         if(!imgInfos[i]) continue;
-        if(y+cellW/imgInfos[i].ratio>pageH-margin-20) { flushRowR(); doc.addPage(); addPageHeader(); y=26; rowStart=y; }
-        var h=Math.min(cellW/imgInfos[i].ratio, 80);
-        rowItems.push({data:imgInfos[i].data,h:h});
-        rowMaxH=Math.max(rowMaxH,h);
-        if(rowItems.length>=photoCols) flushRowR();
+        var ratio=imgInfos[i].ratio;
+        // Largeur max = contentW, hauteur max = 120mm (pour tenir sur une page)
+        var maxW=contentW, maxH=120;
+        var w=maxW, h=maxW/ratio;
+        if(h>maxH) { h=maxH; w=h*ratio; }
+        // Centrer horizontalement
+        var x=margin+(contentW-w)/2;
+        if(y+h>pageH-margin-20) { doc.addPage(); addPageHeader(); y=26; }
+        try { doc.addImage(imgInfos[i].data,'JPEG',x,y,w,h); } catch(e){}
+        y+=h+4;
       }
-      flushRowR();
 
       // Signatures
       if(y+50>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
