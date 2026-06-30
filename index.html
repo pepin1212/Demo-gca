@@ -386,13 +386,18 @@ input[type="file"] { display: none; }
     <div class="page-title">Reprises</div>
     <button class="btn btn-orange btn-sm" onclick="openNewReprise()">+ Nouvelle</button>
   </div>
-  <div style="display:flex;gap:8px;margin-bottom:10px">
+  <div style="display:flex;gap:8px;margin-bottom:8px">
     <input type="text" class="form-input" id="repriseSearch" placeholder="🔍 Immat, client..." oninput="renderRepriseList()" style="flex:1">
     <select class="form-input" id="repriseSort" onchange="renderRepriseList()" style="flex:0 0 auto;width:auto">
       <option value="date_desc">Date ↓</option>
       <option value="date_asc">Date ↑</option>
       <option value="immat">Immat A→Z</option>
       <option value="client">Client A→Z</option>
+    </select>
+  </div>
+  <div id="repriseAgentFilterWrap" style="display:none;margin-bottom:10px">
+    <select class="form-input" id="repriseAgentFilter" onchange="renderRepriseList()">
+      <option value="">— Tous les agents —</option>
     </select>
   </div>
   <div id="repriseList"></div>
@@ -3349,12 +3354,42 @@ function saveReprise() {
 function renderRepriseList() {
   var searchEl=document.getElementById('repriseSearch');
   var sortEl=document.getElementById('repriseSort');
+  var agentFilterEl=document.getElementById('repriseAgentFilter');
+  var agentWrap=document.getElementById('repriseAgentFilterWrap');
   var search=(searchEl?searchEl.value:'').toLowerCase().trim();
   var sort=sortEl?sortEl.value:'date_desc';
 
+  // Filtre agent : admin voit tout + filtre déroulant, agent voit seulement ses reprises
+  var agentFilter='';
+  if(APP.isAdmin) {
+    // Afficher le filtre agent et le peupler
+    if(agentWrap) agentWrap.style.display='block';
+    agentFilter=agentFilterEl?agentFilterEl.value:'';
+    // Peupler la liste des agents avec ceux qui ont des reprises
+    if(agentFilterEl && agentFilterEl.options.length<=1) {
+      var agents={};
+      APP.reprises.forEach(function(rp){ if(rp.agent) agents[rp.agent]=true; });
+      Object.keys(agents).sort().forEach(function(agent){
+        var opt=document.createElement('option');
+        opt.value=agent;
+        opt.textContent=getVendeurDisplay(agent)||agent;
+        agentFilterEl.appendChild(opt);
+      });
+    }
+  } else {
+    // Non-admin : masquer le filtre, forcer filtre sur son propre nom
+    if(agentWrap) agentWrap.style.display='none';
+    agentFilter=APP.user;
+  }
+
   var list=APP.reprises.slice();
 
-  // Filtrage
+  // Filtre par agent
+  if(agentFilter) {
+    list=list.filter(function(rp){ return rp.agent===agentFilter; });
+  }
+
+  // Filtrage texte
   if(search) {
     list=list.filter(function(rp){
       return (rp.immat||'').toLowerCase().includes(search)
@@ -3380,11 +3415,12 @@ function renderRepriseList() {
     var rp=list[i];
     var signed=!!(rp.signature_client && rp.signature_agent);
     var dateDisplay=rp.date_expertise?formatDate(rp.date_expertise):(rp.created_at?formatDate(rp.created_at.split('T')[0]):'—');
+    var agentDisplay=APP.isAdmin?(' · 👤 '+esc(getVendeurDisplay(rp.agent)||rp.agent||'—')):'';
     html+='<div class="card" onclick="openRepriseDetail(\''+rp.id+'\')" style="cursor:pointer">'+
       '<div class="card-header">'+
       '<div style="flex:1;min-width:0">'+
       '<div class="card-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(rp.immat)+' — '+esc(rp.client)+'</div>'+
-      '<div class="card-sub">'+esc(rp.type_vehicule)+(rp.carrosserie?' · '+esc(rp.carrosserie):'')+' · 📅 '+dateDisplay+(signed?' · ✅ Signé':'')+'</div>'+
+      '<div class="card-sub">'+esc(rp.type_vehicule)+(rp.carrosserie?' · '+esc(rp.carrosserie):'')+' · 📅 '+dateDisplay+agentDisplay+(signed?' · ✅ Signé':'')+'</div>'+
       '</div></div></div>';
   }
   document.getElementById('repriseList').innerHTML=html;
