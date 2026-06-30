@@ -3385,6 +3385,29 @@ function openRepriseDetail(id) {
   }
   html+='</div>';
 
+  // Dégâts visibles constatés
+  html+='<div class="divider"></div><div class="section-title">📸 Dégâts visibles constatés</div><div style="font-style:italic;font-size:11px;color:var(--gray);margin:-4px 0 8px">(photographies réalisées en présence du chauffeur)</div>';
+  html+='<div id="repriseDegList_'+id+'">';
+  var degats=rp.degats||[];
+  for(var dg=0;dg<degats.length;dg++) {
+    html+='<div style="margin-bottom:10px">';
+    html+='<div style="display:flex;gap:8px;align-items:flex-start">';
+    html+='<img class="photo-thumb" src="'+degats[dg].url+'" onclick="viewPhoto(\''+degats[dg].url+'\')" alt="" style="flex-shrink:0">';
+    if(APP.isAdmin||!signed) html+='<button onclick="deleteRepriseDegat(\''+id+'\','+dg+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:auto">✕</button>';
+    html+='</div>';
+    if(!signed) {
+      html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(degats[dg].note||'').replace(/"/g,'&quot;')+'" onchange="updateRepriseDegatNote(\''+id+'\','+dg+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
+    } else if(degats[dg].note) {
+      html+='<div style="font-size:12px;color:var(--gray);margin-top:6px">'+esc(degats[dg].note)+'</div>';
+    }
+    html+='</div>';
+  }
+  html+='</div>';
+  if(!signed) {
+    html+='<label class="btn btn-full" for="upRepriseDegat_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter une photo de dégât constaté</label>';
+    html+='<input type="file" id="upRepriseDegat_'+id+'" accept="image/*" multiple onchange="uploadRepriseDegats(\''+id+'\',this)" style="display:none">';
+  }
+
   // Signatures
   html+='<div class="divider"></div><div class="section-title">✍️ Signatures</div>';
   if(!signed) {
@@ -3408,6 +3431,12 @@ function openRepriseDetail(id) {
   html+='<div class="divider"></div>';
   var pdfStyle=signed?'':'opacity:0.5';
   html+='<button class="btn btn-primary btn-full" style="'+pdfStyle+';margin-bottom:8px" onclick="genPdfReprise(\''+id+'\')" >📄 Contre-expertise reprise PDF'+(signed?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
+
+  // ZIP photos
+  var totalPhotos=(rp.photos||[]).length+(rp.degats||[]).length;
+  if(totalPhotos>0) {
+    html+='<button class="btn btn-success btn-full" style="margin-bottom:8px" onclick="downloadRepriseZip(\''+id+'\')">📦 Télécharger les photos (ZIP)</button>';
+  }
 
   // Suppression (admin ou créateur non signé)
   var canDel=APP.isAdmin||(rp.agent===APP.user && !signed);
@@ -3459,6 +3488,75 @@ function uploadReprisePhotos(repriseId, input) {
     });
   }
   uploadNext();
+}
+
+function uploadRepriseDegats(repriseId, input) {
+  var files=input.files; if(!files||!files.length) return;
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+
+  var degats=(rp.degats||[]).slice();
+  var fileArr=[];
+  for(var i=0;i<files.length;i++) fileArr.push(files[i]);
+
+  showLoader('Upload 1 / '+fileArr.length+'...');
+
+  var index=0;
+  function uploadNext() {
+    if(index>=fileArr.length) {
+      sb.from('reprises').update({degats:degats}).eq('id',repriseId).then(function(){
+        return loadReprises();
+      }).then(function(){
+        hideLoader();
+        openRepriseDetail(repriseId);
+        showToast(fileArr.length+' photo(s) ajoutée(s)');
+      }).catch(function(e){hideLoader();showAlert('Erreur sauvegarde : '+(e.message||''));console.error(e);});
+      return;
+    }
+    var file=fileArr[index];
+    showLoader('Compression et upload '+(index+1)+' / '+fileArr.length+'...');
+    compressPhoto(file, function(base64){
+      var path='reprises/'+repriseId+'/degat_'+Date.now()+'_'+Math.random().toString(36).substr(2,4)+'.jpg';
+      uploadToStorage('daf-documents', path, base64).then(function(res){
+        if(res.error) throw res.error;
+        degats.push({url:getPublicUrl('daf-documents', path), note:''});
+        index++;
+        uploadNext();
+      }).catch(function(e){
+        hideLoader();
+        showAlert('Erreur upload photo '+(index+1)+' : '+(e.message||JSON.stringify(e)), '⚠️');
+        console.error(e);
+      });
+    });
+  }
+  uploadNext();
+}
+
+function deleteRepriseDegat(repriseId, index) {
+  if(!confirm('Supprimer cette photo ?')) return;
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  var degats=(rp.degats||[]).slice();
+  var url=degats[index]&&degats[index].url;
+  degats.splice(index,1);
+  showLoader('Suppression...');
+  var storageP=Promise.resolve();
+  if(url) { var path=storagePathFromUrl(url); if(path) storageP=sb.storage.from('daf-documents').remove([path]).catch(function(e){console.error(e);}); }
+  storageP.then(function(){ return sb.from('reprises').update({degats:degats}).eq('id',repriseId); })
+  .then(function(){ return loadReprises(); }).then(function(){
+    hideLoader(); openRepriseDetail(repriseId); showToast('Photo supprimée');
+  }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function updateRepriseDegatNote(repriseId, index, note) {
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  var degats=(rp.degats||[]).slice();
+  if(!degats[index]) return;
+  degats[index]={url:degats[index].url, note:note};
+  sb.from('reprises').update({degats:degats}).eq('id',repriseId).then(function(){
+    return loadReprises();
+  }).catch(function(e){console.error(e);});
 }
 
 function deleteReprisePhoto(repriseId, index) {
@@ -3529,6 +3627,61 @@ function saveRepriseSignature(repriseId, who, dataUrl) {
     openRepriseDetail(repriseId);
     showToast('Signature enregistrée');
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
+}
+
+function downloadRepriseZip(repriseId) {
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  var photos=rp.photos||[];
+  var degats=rp.degats||[];
+  if(photos.length===0 && degats.length===0) { showAlert('Aucune photo à télécharger.'); return; }
+
+  showLoader('Création du ZIP...');
+  var zip=new JSZip();
+  var promises=[];
+
+  photos.forEach(function(url, i){
+    promises.push(fetch(url).then(function(resp){return resp.blob();}).then(function(blob){
+      zip.file('photos_etat_vehicule/photo_'+(i+1)+'.jpg', blob);
+    }).catch(function(){}));
+  });
+
+  degats.forEach(function(item, i){
+    promises.push(fetch(item.url).then(function(resp){return resp.blob();}).then(function(blob){
+      zip.file('photos_degradation/photo_'+(i+1)+'.jpg', blob);
+    }).catch(function(){}));
+  });
+
+  // Notes des dégâts
+  if(degats.length>0) {
+    var notes='DÉGÂTS VISIBLES CONSTATÉS\n\n';
+    degats.forEach(function(item, i){
+      notes+='Photo '+(i+1)+': '+(item.note||'(sans description)')+'\n';
+    });
+    zip.file('photos_degradation/notes.txt', notes);
+  }
+
+  // Fiche info
+  var fiche='REPRISE\n';
+  fiche+='Client: '+rp.client+'\n';
+  fiche+='Type de véhicule: '+rp.type_vehicule+'\n';
+  if(rp.carrosserie) fiche+='Carrosserie: '+rp.carrosserie+'\n';
+  fiche+='Immatriculation: '+rp.immat+'\n';
+  fiche+='Agent DAF Trucks: '+getVendeurDisplay(rp.agent)+'\n';
+  var chauffeurLine=((rp.chauffeur_prenom||'')+' '+(rp.chauffeur_nom||'')).trim();
+  if(chauffeurLine) fiche+='Chauffeur: '+chauffeurLine+'\n';
+  zip.file('fiche_reprise.txt', fiche);
+
+  Promise.all(promises).then(function(){
+    return zip.generateAsync({type:'blob'});
+  }).then(function(content){
+    hideLoader();
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(content);
+    a.download='reprise_'+rp.immat+'_'+rp.client.replace(/\s/g,'_')+'.zip';
+    a.click();
+    showToast('ZIP téléchargé');
+  }).catch(function(e){hideLoader();showAlert('Erreur ZIP : '+(e.message||''));console.error(e);});
 }
 
 function deleteReprise(id) {
@@ -3696,7 +3849,108 @@ function genPdfReprise(repriseId) {
       flushRow(); // flush la dernière ligne incomplète
       y=rowY;
 
-      // Signatures
+      return continueAfterPhotos();
+    });
+  } else {
+    return continueAfterPhotos();
+  }
+
+  function continueAfterPhotos() {
+    var degats=rp.degats||[];
+    var degPromise=Promise.resolve();
+
+    if(degats.length>0) {
+      degPromise=(function(){
+        doc.addPage(); addPageHeader();
+        y=26;
+
+        var COL_ALERT=[220,38,38];
+        doc.setFillColor(COL_ALERT[0],COL_ALERT[1],COL_ALERT[2]);
+        doc.rect(margin, y, contentW, 10, 'F');
+        doc.setFont(undefined,'bold');
+        doc.setTextColor(255,255,255);
+        doc.setFontSize(11);
+        doc.text('DÉGÂTS VISIBLES CONSTATÉS', margin+4, y+7);
+        y+=15;
+        doc.setFont(undefined,'italic');
+        doc.setFontSize(8);
+        doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
+        doc.text('(photographies réalisées en présence du chauffeur)', margin, y);
+        doc.setFont(undefined,'normal');
+        y+=5;
+
+        var loadDeg=degats.map(function(item){
+          return fetch(item.url).then(function(resp){return resp.blob();}).then(function(blob){
+            return new Promise(function(resolve){
+              var reader=new FileReader();
+              reader.onload=function(e){
+                var dataUrl=e.target.result;
+                var img=new Image();
+                img.onload=function(){ resolve({data:dataUrl, ratio:img.naturalWidth/img.naturalHeight, note:item.note}); };
+                img.onerror=function(){ resolve({data:dataUrl, ratio:4/3, note:item.note}); };
+                img.src=dataUrl;
+              };
+              reader.readAsDataURL(blob);
+            });
+          }).catch(function(){return null;});
+        });
+
+        return Promise.all(loadDeg).then(function(degInfos){
+          var degCols=2;
+          var boxGap=3, boxPad=3;
+          var boxW=(contentW-(degCols-1)*boxGap)/degCols;
+          var degImgMaxH=55;
+          var dcol=0, rowItems=[];
+
+          function flushDegRow() {
+            if(!rowItems.length) return;
+            var rowH=0;
+            rowItems.forEach(function(it){ if(it.boxH>rowH) rowH=it.boxH; });
+            if(y+rowH>pageH-margin-20) { doc.addPage(); addPageHeader(); y=26; }
+            rowItems.forEach(function(it,ci){
+              var bx=margin+ci*(boxW+boxGap);
+              doc.setDrawColor(220,224,230);
+              doc.setLineWidth(0.3);
+              doc.rect(bx, y, boxW, it.boxH);
+              if(it.data) {
+                var w=Math.min(boxW-2*boxPad, it.ratio*degImgMaxH);
+                var h=Math.min(degImgMaxH, w/it.ratio);
+                w=h*it.ratio;
+                var ix=bx+(boxW-w)/2;
+                try { doc.addImage(it.data,'JPEG',ix,y+boxPad,w,h); } catch(e){}
+              }
+              if(it.note) {
+                doc.setFont(undefined,'normal');
+                doc.setFontSize(7.5);
+                doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
+                var noteLines=doc.splitTextToSize(it.note, boxW-2*boxPad);
+                doc.text(noteLines, bx+boxPad, y+degImgMaxH+boxPad+4);
+              }
+            });
+            y+=rowH+boxGap;
+            rowItems=[];
+            dcol=0;
+          }
+
+          degInfos.forEach(function(info){
+            if(!info) return;
+            var noteH=info.note?(doc.splitTextToSize(info.note, boxW-6).length*3.5+4):2;
+            var boxH=degImgMaxH+2*boxPad+noteH;
+            rowItems.push({data:info.data, ratio:info.ratio, note:info.note, boxH:boxH});
+            dcol++;
+            if(dcol>=degCols) flushDegRow();
+          });
+          flushDegRow();
+        });
+      })();
+    }
+
+    return degPromise.then(function(){
+      return continueToSignatures();
+    });
+  }
+
+  function continueToSignatures() {
       if(y+50>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
       y=sectionBoxR('SIGNATURES', y);
 
@@ -3757,15 +4011,6 @@ function genPdfReprise(repriseId) {
         doc.save('contre_expertise_reprise_'+rp.immat+'_'+rp.client.replace(/\s/g,'_')+'.pdf');
         showToast('PDF généré');
       });
-    });
-  } else {
-    // Pas de photos, juste les signatures
-    if(y+60>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
-    addPageNumbers();
-    hideLoader();
-    doc.save('contre_expertise_reprise_'+rp.immat+'.pdf');
-    showToast('PDF généré (sans photos)');
-    return;
   }
 }
 
