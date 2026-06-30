@@ -3356,7 +3356,19 @@ function openRepriseDetail(id) {
   html+='<div class="info-row"><span class="info-label">Type</span><span class="info-value">'+esc(rp.type_vehicule)+'</span></div>';
   if(rp.carrosserie) html+='<div class="info-row"><span class="info-label">Carrosserie</span><span class="info-value">'+esc(rp.carrosserie)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Immatriculation</span><span class="info-value">'+esc(rp.immat)+'</span></div>';
-  html+='<div class="info-row"><span class="info-label">Agent DAF</span><span class="info-value">'+esc(getVendeurDisplay(rp.agent))+'</span></div>';
+
+  // Agent DAF (auto-renseigné, lecture seule)
+  var agentDisplay=getVendeurDisplay(rp.agent)||rp.agent||'—';
+  html+='<div class="info-row"><span class="info-label">Agent DAF Trucks</span><span class="info-value" style="font-weight:700">'+esc(agentDisplay)+'</span></div>';
+
+  // Chauffeur / Représentant client
+  html+='<div class="divider"></div><div class="section-title">Chauffeur / Représentant client</div>';
+  if(!signed) {
+    html+='<div class="form-group"><label class="form-label">Nom du chauffeur *</label><input type="text" class="form-input" id="repriseChauffeurNom_'+id+'" value="'+esc(rp.chauffeur_nom||'')+'" placeholder="Nom" onchange="saveRepriseChauffeur(\''+id+'\')"></div>';
+    html+='<div class="form-group"><label class="form-label">Prénom du chauffeur *</label><input type="text" class="form-input" id="repriseChauffeurPrenom_'+id+'" value="'+esc(rp.chauffeur_prenom||'')+'" placeholder="Prénom" onchange="saveRepriseChauffeur(\''+id+'\')"></div>';
+  } else {
+    html+='<div class="info-row"><span class="info-label">Chauffeur</span><span class="info-value">'+esc((rp.chauffeur_prenom||'')+' '+(rp.chauffeur_nom||''))+'</span></div>';
+  }
 
   // Photos
   html+='<div class="divider"></div><div class="section-title">Photos de l\'état du véhicule</div>';
@@ -3465,6 +3477,14 @@ function deleteReprisePhoto(repriseId, index) {
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
+function saveRepriseChauffeur(repriseId) {
+  var nom=document.getElementById('repriseChauffeurNom_'+repriseId).value.trim()||null;
+  var prenom=document.getElementById('repriseChauffeurPrenom_'+repriseId).value.trim()||null;
+  sb.from('reprises').update({chauffeur_nom:nom, chauffeur_prenom:prenom}).eq('id',repriseId).then(function(){
+    return loadReprises();
+  }).catch(function(e){console.error(e);});
+}
+
 function saveRepriseLieu(repriseId) {
   var val=document.getElementById('repriseSigLieu_'+repriseId).value.trim()||null;
   sb.from('reprises').update({signature_lieu:val}).eq('id',repriseId).then(function(){ return loadReprises(); }).catch(function(e){console.error(e);});
@@ -3475,6 +3495,7 @@ function openRepriseSigPad(repriseId, who) {
   var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
   if(!rp) return;
   if(!rp.signature_lieu) { showAlert('Veuillez renseigner le lieu de signature avant de signer.', '📍'); return; }
+  if(!rp.chauffeur_nom||!rp.chauffeur_prenom) { showAlert('Veuillez renseigner le nom et prénom du chauffeur avant de signer.', '📝'); return; }
   repriseSigPadData={id:repriseId, who:who};
   document.getElementById('sigResaId').value=repriseId;
   document.getElementById('sigType').value='reprise_'+who;
@@ -3602,8 +3623,10 @@ function genPdfReprise(repriseId) {
   fieldLineR('IMMATRICULATION', rp.immat, y, 0);
   fieldLineR('AGENT DAF TRUCKS', getVendeurDisplay(rp.agent), y, contentW/2);
   y+=11;
+  var chauffeurDisplay=((rp.chauffeur_prenom||'')+' '+(rp.chauffeur_nom||'')).trim();
+  if(chauffeurDisplay) { fieldLineR('CHAUFFEUR / REPRÉSENTANT', chauffeurDisplay, y, 0); y+=11; }
 
-  // Photos
+  // Photos — 2 colonnes, max 4 par page (2 lignes × 2 colonnes)
   var photos=rp.photos||[];
   if(photos.length>0) {
     y=sectionBoxR('ÉTAT DU VÉHICULE — PHOTOS', y);
@@ -3612,6 +3635,10 @@ function genPdfReprise(repriseId) {
     doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
     doc.text('(photographies réalisées en présence du client)', margin, y);
     y+=6;
+
+    var photoCols=2;
+    var cellW=(contentW-4)/photoCols; // 2 colonnes avec gap de 4
+    var maxCellH=60; // hauteur max par photo pour tenir 2 lignes sur une page
 
     var loadP=photos.map(function(url){
       return fetch(url).then(function(r){return r.blob();}).then(function(blob){
@@ -3629,20 +3656,45 @@ function genPdfReprise(repriseId) {
     });
 
     return Promise.all(loadP).then(function(imgInfos){
-      // Une photo par ligne pour préserver les dimensions — pas de grille forcée
-      for(var i=0;i<imgInfos.length;i++){
-        if(!imgInfos[i]) continue;
-        var ratio=imgInfos[i].ratio;
-        // Largeur max = contentW, hauteur max = 120mm (pour tenir sur une page)
-        var maxW=contentW, maxH=120;
-        var w=maxW, h=maxW/ratio;
-        if(h>maxH) { h=maxH; w=h*ratio; }
-        // Centrer horizontalement
-        var x=margin+(contentW-w)/2;
-        if(y+h>pageH-margin-20) { doc.addPage(); addPageHeader(); y=26; }
-        try { doc.addImage(imgInfos[i].data,'JPEG',x,y,w,h); } catch(e){}
-        y+=h+4;
+      var col=0, rowH=0, rowY=y;
+      var rowData=[null, null]; // 2 slots par ligne
+
+      function flushRow() {
+        if(!rowData[0] && !rowData[1]) return;
+        // Calculer la hauteur de la ligne = max des hauteurs contain des 2 photos
+        var h0=0, h1=0;
+        if(rowData[0]) { var r0=rowData[0].ratio; h0=Math.min(cellW/r0, maxCellH); }
+        if(rowData[1]) { var r1=rowData[1].ratio; h1=Math.min(cellW/r1, maxCellH); }
+        var lineH=Math.max(h0||maxCellH, h1||maxCellH);
+        // Saut de page si nécessaire
+        if(rowY+lineH>pageH-margin-28) {
+          doc.addPage(); addPageHeader(); rowY=26;
+        }
+        // Dessin colonne 0
+        if(rowData[0]) {
+          var w0=Math.min(cellW, (rowData[0].ratio)*lineH);
+          var x0=margin+(cellW-w0)/2;
+          try { doc.addImage(rowData[0].data,'JPEG',x0,rowY,w0,lineH); } catch(e){}
+        }
+        // Dessin colonne 1
+        if(rowData[1]) {
+          var w1=Math.min(cellW, (rowData[1].ratio)*lineH);
+          var x1=margin+cellW+4+(cellW-w1)/2;
+          try { doc.addImage(rowData[1].data,'JPEG',x1,rowY,w1,lineH); } catch(e){}
+        }
+        rowY+=lineH+4;
+        rowData=[null,null];
+        col=0;
       }
+
+      for(var i=0;i<imgInfos.length;i++) {
+        if(!imgInfos[i]) continue;
+        rowData[col]=imgInfos[i];
+        col++;
+        if(col>=photoCols) flushRow();
+      }
+      flushRow(); // flush la dernière ligne incomplète
+      y=rowY;
 
       // Signatures
       if(y+50>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
@@ -3657,14 +3709,15 @@ function genPdfReprise(repriseId) {
         var colGap=6, colW=(contentW-colGap)/2, sigH=28;
         if(y+sigH+20>pageH-margin) { doc.addPage(); addPageHeader(); y=26; }
 
-        // Bloc client
+        // Bloc client (signature chauffeur/représentant)
         doc.setFont(undefined,'bold');
         doc.setTextColor(COL_GRAY[0],COL_GRAY[1],COL_GRAY[2]);
         doc.setFontSize(8);
-        doc.text('SIGNATURE CLIENT', margin, y);
+        doc.text('SIGNATURE CLIENT / CHAUFFEUR', margin, y);
         doc.setTextColor(COL_DARK[0],COL_DARK[1],COL_DARK[2]);
         doc.setFontSize(9.5);
-        doc.text(rp.client||'—', margin, y+4.5);
+        var chauffeurLine=((rp.chauffeur_prenom||'')+' '+(rp.chauffeur_nom||'')).trim()||rp.client||'—';
+        doc.text(chauffeurLine, margin, y+4.5);
         try { doc.setDrawColor(220,224,230); doc.setLineWidth(0.3); doc.rect(margin,y+7,colW,sigH); if(sigs[0]) doc.addImage(sigs[0],'PNG',margin,y+7,colW,sigH); } catch(e){}
 
         // Bloc agent
