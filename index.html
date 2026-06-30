@@ -3421,7 +3421,7 @@ function openRepriseDetail(id) {
     html+='<img class="photo-thumb" src="'+photos[p]+'" onclick="viewPhoto(\''+photos[p]+'\')" alt="">';
     if(APP.isAdmin) html+='<button onclick="deleteReprisePhoto(\''+id+'\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
   }
-  if(!signed) {
+  if(!signed || APP.isAdmin) {
     html+='<label class="photo-add" for="upReprisePhoto_'+id+'">+</label>';
     html+='<input type="file" id="upReprisePhoto_'+id+'" accept="image/*" multiple onchange="uploadReprisePhotos(\''+id+'\',this)">';
   }
@@ -3437,7 +3437,7 @@ function openRepriseDetail(id) {
     html+='<img class="photo-thumb" src="'+degats[dg].url+'" onclick="viewPhoto(\''+degats[dg].url+'\')" alt="" style="flex-shrink:0">';
     if(APP.isAdmin||!signed) html+='<button onclick="deleteRepriseDegat(\''+id+'\','+dg+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:auto">✕</button>';
     html+='</div>';
-    if(!signed) {
+    if(!signed || APP.isAdmin) {
       html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(degats[dg].note||'').replace(/"/g,'&quot;')+'" onchange="updateRepriseDegatNote(\''+id+'\','+dg+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
     } else if(degats[dg].note) {
       html+='<div style="font-size:12px;color:var(--gray);margin-top:6px">'+esc(degats[dg].note)+'</div>';
@@ -3445,7 +3445,7 @@ function openRepriseDetail(id) {
     html+='</div>';
   }
   html+='</div>';
-  if(!signed) {
+  if(!signed || APP.isAdmin) {
     html+='<label class="btn btn-full" for="upRepriseDegat_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter une photo de dégât constaté</label>';
     html+='<input type="file" id="upRepriseDegat_'+id+'" accept="image/*" multiple onchange="uploadRepriseDegats(\''+id+'\',this)" style="display:none">';
   }
