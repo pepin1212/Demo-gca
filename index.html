@@ -384,6 +384,15 @@ input[type="file"] { display: none; }
     <div class="page-title">Reprises</div>
     <button class="btn btn-orange btn-sm" onclick="openNewReprise()">+ Nouvelle</button>
   </div>
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <input type="text" class="form-input" id="repriseSearch" placeholder="🔍 Immat, client..." oninput="renderRepriseList()" style="flex:1">
+    <select class="form-input" id="repriseSort" onchange="renderRepriseList()" style="flex:0 0 auto;width:auto">
+      <option value="date_desc">Date ↓</option>
+      <option value="date_asc">Date ↑</option>
+      <option value="immat">Immat A→Z</option>
+      <option value="client">Client A→Z</option>
+    </select>
+  </div>
   <div id="repriseList"></div>
 </div>
 
@@ -408,6 +417,7 @@ input[type="file"] { display: none; }
         </div>
         <div class="form-group" id="repriseCarrosserieWrap" style="display:none"><label class="form-label">Carrosserie</label><input type="text" class="form-input" id="repriseCarrosserie" placeholder="Ex: Benne, Frigorifique, Plateau..."></div>
         <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="repriseImmat" placeholder="AB-123-CD" style="text-transform:uppercase"></div>
+        <div class="form-group"><label class="form-label">Date d'expertise</label><input type="date" class="form-input" id="repriseDate"></div>
       </div>
       <input type="hidden" id="editRepriseId">
       <button class="btn btn-primary btn-full" onclick="saveReprise()">Créer la reprise</button>
@@ -3291,6 +3301,7 @@ function openNewReprise() {
   document.getElementById('repriseType').value='';
   document.getElementById('repriseCarrosserie').value='';
   document.getElementById('repriseImmat').value='';
+  document.getElementById('repriseDate').value=toDateStr(new Date()); // date du jour par défaut
   document.getElementById('editRepriseId').value='';
   document.getElementById('repriseCarrosserieWrap').style.display='none';
   openModal('modalNewReprise');
@@ -3310,7 +3321,8 @@ function saveReprise() {
     carrosserie:(type==='Porteur'&&carrosserie?carrosserie:null),
     immat:immat,
     agent:APP.user,
-    photos:[]
+    photos:[],
+    date_expertise:document.getElementById('repriseDate').value||toDateStr(new Date())
   };
   showLoader('Création...');
   sb.from('reprises').insert(data).select().then(function(res){
@@ -3329,17 +3341,45 @@ function saveReprise() {
 }
 
 function renderRepriseList() {
-  var html='';
-  if(APP.reprises.length===0) {
-    html='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Aucune reprise</div><div class="empty-sub">Créez une nouvelle contre-expertise de reprise</div></div>';
+  var searchEl=document.getElementById('repriseSearch');
+  var sortEl=document.getElementById('repriseSort');
+  var search=(searchEl?searchEl.value:'').toLowerCase().trim();
+  var sort=sortEl?sortEl.value:'date_desc';
+
+  var list=APP.reprises.slice();
+
+  // Filtrage
+  if(search) {
+    list=list.filter(function(rp){
+      return (rp.immat||'').toLowerCase().includes(search)
+        || (rp.client||'').toLowerCase().includes(search)
+        || (rp.date_expertise||rp.created_at||'').includes(search);
+    });
   }
-  for(var i=0;i<APP.reprises.length;i++) {
-    var rp=APP.reprises[i];
+
+  // Tri
+  list.sort(function(a,b){
+    if(sort==='immat') return (a.immat||'').localeCompare(b.immat||'');
+    if(sort==='client') return (a.client||'').localeCompare(b.client||'');
+    var da=a.date_expertise||a.created_at||'';
+    var db=b.date_expertise||b.created_at||'';
+    return sort==='date_asc'?(da<db?-1:da>db?1:0):(da>db?-1:da<db?1:0);
+  });
+
+  var html='';
+  if(list.length===0) {
+    html='<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">'+(search?'Aucun résultat':'Aucune reprise')+'</div><div class="empty-sub">'+(search?'Modifiez votre recherche':'Créez une nouvelle contre-expertise de reprise')+'</div></div>';
+  }
+  for(var i=0;i<list.length;i++) {
+    var rp=list[i];
     var signed=!!(rp.signature_client && rp.signature_agent);
+    var dateDisplay=rp.date_expertise?formatDate(rp.date_expertise):(rp.created_at?formatDate(rp.created_at.split('T')[0]):'—');
     html+='<div class="card" onclick="openRepriseDetail(\''+rp.id+'\')" style="cursor:pointer">'+
       '<div class="card-header">'+
-      '<div style="flex:1;min-width:0"><div class="card-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(rp.immat)+' — '+esc(rp.client)+'</div>'+
-      '<div class="card-sub">'+esc(rp.type_vehicule)+(rp.carrosserie?' · '+esc(rp.carrosserie):'')+(signed?' · ✅ Signé':'')+'</div></div></div></div>';
+      '<div style="flex:1;min-width:0">'+
+      '<div class="card-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(rp.immat)+' — '+esc(rp.client)+'</div>'+
+      '<div class="card-sub">'+esc(rp.type_vehicule)+(rp.carrosserie?' · '+esc(rp.carrosserie):'')+' · 📅 '+dateDisplay+(signed?' · ✅ Signé':'')+'</div>'+
+      '</div></div></div>';
   }
   document.getElementById('repriseList').innerHTML=html;
 }
@@ -3356,6 +3396,8 @@ function openRepriseDetail(id) {
   html+='<div class="info-row"><span class="info-label">Type</span><span class="info-value">'+esc(rp.type_vehicule)+'</span></div>';
   if(rp.carrosserie) html+='<div class="info-row"><span class="info-label">Carrosserie</span><span class="info-value">'+esc(rp.carrosserie)+'</span></div>';
   html+='<div class="info-row"><span class="info-label">Immatriculation</span><span class="info-value">'+esc(rp.immat)+'</span></div>';
+  var dateExp=rp.date_expertise||(rp.created_at?rp.created_at.split('T')[0]:null);
+  if(dateExp) html+='<div class="info-row"><span class="info-label">Date d\'expertise</span><span class="info-value">'+formatDate(dateExp)+'</span></div>';
 
   // Agent DAF (auto-renseigné, lecture seule)
   var agentDisplay=getVendeurDisplay(rp.agent)||rp.agent||'—';
@@ -3776,6 +3818,8 @@ function genPdfReprise(repriseId) {
   fieldLineR('IMMATRICULATION', rp.immat, y, 0);
   fieldLineR('AGENT DAF TRUCKS', getVendeurDisplay(rp.agent), y, contentW/2);
   y+=11;
+  var dateExpPdf=rp.date_expertise||(rp.created_at?rp.created_at.split('T')[0]:null);
+  if(dateExpPdf) { fieldLineR('DATE D\'EXPERTISE', formatDate(dateExpPdf), y, 0); y+=11; }
   var chauffeurDisplay=((rp.chauffeur_prenom||'')+' '+(rp.chauffeur_nom||'')).trim();
   if(chauffeurDisplay) { fieldLineR('CHAUFFEUR / REPRÉSENTANT', chauffeurDisplay, y, 0); y+=11; }
 
