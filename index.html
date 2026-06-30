@@ -205,7 +205,9 @@ input, select, textarea { font-size: 16px !important; }
 
 /* PHOTO GRID */
 .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 8px; }
-.photo-thumb { aspect-ratio: 1; border-radius: 6px; object-fit: cover; width: 100%; cursor: pointer; }
+.photo-wrap { position: relative; aspect-ratio: 1; }
+.photo-thumb { aspect-ratio: 1; border-radius: 6px; object-fit: cover; width: 100%; cursor: pointer; display: block; }
+.photo-del { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: rgba(220,38,38,0.85); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 15px; cursor: pointer; z-index: 5; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px); }
 .photo-add { aspect-ratio: 1; border-radius: 6px; border: 2px dashed var(--gray-light); display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--light); font-size: 22px; color: var(--gray); }
 
 /* MODAL PHOTO VIEWER */
@@ -1338,8 +1340,10 @@ function openResaDetail(id) {
   html+='<div class="photo-grid" id="pdGrid_'+id+'">';
   var pd=r.photos_depart||[];
   for(var p=0;p<pd.length;p++) {
+    html+='<div class="photo-wrap">';
     html+='<img class="photo-thumb" src="'+pd[p]+'" onclick="viewPhoto(\''+pd[p]+'\')" alt="">';
-    if(APP.isAdmin) html+='<button onclick="deletePhoto(\''+id+'\',\'depart\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
+    if(APP.isAdmin) html+='<button class="photo-del" onclick="deletePhoto(\''+id+'\',\'depart\','+p+')">✕</button>';
+    html+='</div>';
   }
   html+='<label class="photo-add" for="upPhotoD_'+id+'">+</label>';
   html+='<input type="file" id="upPhotoD_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'depart\',this)">';
@@ -1404,8 +1408,10 @@ function openResaDetail(id) {
   html+='<div class="photo-grid" id="prGrid_'+id+'">';
   var pr=r.photos_retour||[];
   for(var p=0;p<pr.length;p++) {
+    html+='<div class="photo-wrap">';
     html+='<img class="photo-thumb" src="'+pr[p]+'" onclick="viewPhoto(\''+pr[p]+'\')" alt="">';
-    if(APP.isAdmin) html+='<button onclick="deletePhoto(\''+id+'\',\'retour\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
+    if(APP.isAdmin) html+='<button class="photo-del" onclick="deletePhoto(\''+id+'\',\'retour\','+p+')">✕</button>';
+    html+='</div>';
   }
   html+='<label class="photo-add" for="upPhotoR_'+id+'">+</label>';
   html+='<input type="file" id="upPhotoR_'+id+'" accept="image/*" multiple onchange="uploadPhotos(\''+id+'\',\'retour\',this)">';
@@ -1417,9 +1423,9 @@ function openResaDetail(id) {
   var pdg=r.photos_degradation||[];
   for(var p=0;p<pdg.length;p++) {
     html+='<div style="margin-bottom:10px">';
-    html+='<div style="display:flex;gap:8px;align-items:flex-start">';
-    html+='<img class="photo-thumb" src="'+pdg[p].url+'" onclick="viewPhoto(\''+pdg[p].url+'\')" alt="" style="flex-shrink:0">';
-    if(APP.isAdmin) html+='<button onclick="deletePhoto(\''+id+'\',\'degradation\','+p+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:auto">✕</button>';
+    html+='<div style="position:relative;display:inline-block;width:80px;height:80px;flex-shrink:0">';
+    html+='<img class="photo-thumb" src="'+pdg[p].url+'" onclick="viewPhoto(\''+pdg[p].url+'\')" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:6px;display:block">';
+    if(APP.isAdmin) html+='<button class="photo-del" onclick="deletePhoto(\''+id+'\',\'degradation\','+p+')">✕</button>';
     html+='</div>';
     html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(pdg[p].note||'').replace(/"/g,'&quot;')+'" onchange="updateDegradationNote(\''+id+'\','+p+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
     html+='</div>';
@@ -3418,8 +3424,10 @@ function openRepriseDetail(id) {
   var photos=rp.photos||[];
   html+='<div class="photo-grid" id="reprisePhotoGrid_'+id+'">';
   for(var p=0;p<photos.length;p++) {
+    html+='<div class="photo-wrap">';
     html+='<img class="photo-thumb" src="'+photos[p]+'" onclick="viewPhoto(\''+photos[p]+'\')" alt="">';
-    if(APP.isAdmin) html+='<button onclick="deleteReprisePhoto(\''+id+'\','+p+')" style="position:relative;margin-top:-28px;background:var(--danger);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;z-index:5;align-self:start;margin-left:-20px">✕</button>';
+    if(APP.isAdmin) html+='<button class="photo-del" onclick="deleteReprisePhoto(\''+id+'\','+p+')">✕</button>';
+    html+='</div>';
   }
   if(!signed || APP.isAdmin) {
     html+='<label class="photo-add" for="upReprisePhoto_'+id+'">+</label>';
@@ -3433,9 +3441,9 @@ function openRepriseDetail(id) {
   var degats=rp.degats||[];
   for(var dg=0;dg<degats.length;dg++) {
     html+='<div style="margin-bottom:10px">';
-    html+='<div style="display:flex;gap:8px;align-items:flex-start">';
-    html+='<img class="photo-thumb" src="'+degats[dg].url+'" onclick="viewPhoto(\''+degats[dg].url+'\')" alt="" style="flex-shrink:0">';
-    if(APP.isAdmin||!signed) html+='<button onclick="deleteRepriseDegat(\''+id+'\','+dg+')" style="background:var(--danger);color:white;border:none;border-radius:50%;width:24px;height:24px;font-size:12px;cursor:pointer;flex-shrink:0;margin-left:auto">✕</button>';
+    html+='<div style="position:relative;display:inline-block;width:80px;height:80px;flex-shrink:0">';
+    html+='<img class="photo-thumb" src="'+degats[dg].url+'" onclick="viewPhoto(\''+degats[dg].url+'\')" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:6px;display:block">';
+    if(APP.isAdmin||!signed) html+='<button class="photo-del" onclick="deleteRepriseDegat(\''+id+'\','+dg+')">✕</button>';
     html+='</div>';
     if(!signed || APP.isAdmin) {
       html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(degats[dg].note||'').replace(/"/g,'&quot;')+'" onchange="updateRepriseDegatNote(\''+id+'\','+dg+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
