@@ -3442,7 +3442,9 @@ function openRepriseDetail(id) {
   for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===id) rp=APP.reprises[i];
   if(!rp) return;
   document.getElementById('repriseDetailTitle').textContent=esc(rp.immat)+' — Reprise';
-  var signed=!!(rp.signature_client && rp.signature_agent);
+  var signed=!!(rp.signature_client && rp.signature_agent);  // les deux signées → PDF dispo
+  var anySigned=!!(rp.signature_client || rp.signature_agent); // au moins une signée → verrouillage
+  var canEdit=APP.isAdmin || !anySigned; // admin toujours, sinon seulement avant première signature
   var html='';
   html+='<div class="section-title">Informations</div>';
   html+='<div class="info-row"><span class="info-label">Client</span><span class="info-value">'+esc(rp.client)+'</span></div>';
@@ -3452,8 +3454,13 @@ function openRepriseDetail(id) {
   var dateExp=rp.date_expertise||(rp.created_at?rp.created_at.split('T')[0]:null);
   if(dateExp) html+='<div class="info-row"><span class="info-label">Date d\'expertise</span><span class="info-value">'+formatDate(dateExp)+'</span></div>';
 
-  // Champs véhicule éditables avant signature
-  if(!signed) {
+  // Message de verrouillage si 1ère signature déjà faite
+  if(!canEdit) {
+    html+='<div style="background:rgba(239,68,68,0.08);border-radius:8px;padding:8px 10px;font-size:12px;color:#B91C1C;margin-bottom:10px">🔒 Une signature a déjà été enregistrée. Modifications réservées à l\'administrateur.</div>';
+  }
+
+  // Champs véhicule éditables
+  if(canEdit) {
     html+='<div class="divider"></div><div class="section-title">Données véhicule *</div>';
     html+='<div class="form-group"><label class="form-label">Date de mise en circulation *</label><input type="text" class="form-input" id="repriseMecEdit_'+id+'" value="'+(rp.date_mec?formatDate(rp.date_mec):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
     html+='<div class="form-group"><label class="form-label">Date de contrôle technique *</label><input type="text" class="form-input" id="repriseCtEdit_'+id+'" value="'+(rp.date_ct?formatDate(rp.date_ct):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
@@ -3465,20 +3472,20 @@ function openRepriseDetail(id) {
     if(rp.km!=null) html+='<div class="info-row"><span class="info-label">Kilométrage</span><span class="info-value">'+rp.km+' km</span></div>';
   }
 
-  // Agent DAF (auto-renseigné, lecture seule)
+  // Agent DAF (lecture seule)
   var agentDisplay=getVendeurDisplay(rp.agent)||rp.agent||'—';
   html+='<div class="info-row"><span class="info-label">Agent DAF Trucks</span><span class="info-value" style="font-weight:700">'+esc(agentDisplay)+'</span></div>';
 
   // Chauffeur / Représentant client
   html+='<div class="divider"></div><div class="section-title">Chauffeur / Représentant client</div>';
-  if(!signed) {
+  if(canEdit) {
     html+='<div class="form-group"><label class="form-label">Nom du chauffeur *</label><input type="text" class="form-input" id="repriseChauffeurNom_'+id+'" value="'+esc(rp.chauffeur_nom||'')+'" placeholder="Nom" onchange="saveRepriseChauffeur(\''+id+'\')"></div>';
     html+='<div class="form-group"><label class="form-label">Prénom du chauffeur *</label><input type="text" class="form-input" id="repriseChauffeurPrenom_'+id+'" value="'+esc(rp.chauffeur_prenom||'')+'" placeholder="Prénom" onchange="saveRepriseChauffeur(\''+id+'\')"></div>';
   } else {
     html+='<div class="info-row"><span class="info-label">Chauffeur</span><span class="info-value">'+esc((rp.chauffeur_prenom||'')+' '+(rp.chauffeur_nom||''))+'</span></div>';
   }
 
-  // Photos
+  // Photos état véhicule
   html+='<div class="divider"></div><div class="section-title">Photos de l\'état du véhicule</div>';
   html+='<div style="font-style:italic;font-size:11px;color:var(--gray);margin:-4px 0 8px">(photographies réalisées en présence du client)</div>';
   var photos=rp.photos||[];
@@ -3489,7 +3496,7 @@ function openRepriseDetail(id) {
     if(APP.isAdmin) html+='<button class="photo-del" onclick="deleteReprisePhoto(\''+id+'\','+p+')">✕</button>';
     html+='</div>';
   }
-  if(!signed || APP.isAdmin) {
+  if(canEdit) {
     html+='<label class="photo-add" for="upReprisePhoto_'+id+'">+</label>';
     html+='<input type="file" id="upReprisePhoto_'+id+'" accept="image/*" multiple onchange="uploadReprisePhotos(\''+id+'\',this)">';
   }
@@ -3503,17 +3510,17 @@ function openRepriseDetail(id) {
     html+='<div style="margin-bottom:10px">';
     html+='<div style="position:relative;display:inline-block;width:80px;height:80px;flex-shrink:0">';
     html+='<img class="photo-thumb" src="'+degats[dg].url+'" onclick="viewPhoto(\''+degats[dg].url+'\')" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:6px;display:block">';
-    if(APP.isAdmin||!signed) html+='<button class="photo-del" onclick="deleteRepriseDegat(\''+id+'\','+dg+')">✕</button>';
+    if(APP.isAdmin) html+='<button class="photo-del" onclick="deleteRepriseDegat(\''+id+'\','+dg+')">✕</button>';
     html+='</div>';
-    if(!signed || APP.isAdmin) {
-      html+='<input type="text" class="input" placeholder="Description (ex: rayure portière gauche)" value="'+(degats[dg].note||'').replace(/"/g,'&quot;')+'" onchange="updateRepriseDegatNote(\''+id+'\','+dg+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
+    if(canEdit) {
+      html+='<input type="text" class="input" placeholder="Description" value="'+(degats[dg].note||'').replace(/"/g,'&quot;')+'" onchange="updateRepriseDegatNote(\''+id+'\','+dg+',this.value)" style="width:100%;margin-top:6px;box-sizing:border-box">';
     } else if(degats[dg].note) {
       html+='<div style="font-size:12px;color:var(--gray);margin-top:6px">'+esc(degats[dg].note)+'</div>';
     }
     html+='</div>';
   }
   html+='</div>';
-  if(!signed || APP.isAdmin) {
+  if(canEdit) {
     html+='<label class="btn btn-full" for="upRepriseDegat_'+id+'" style="cursor:pointer;text-align:center;display:block;background:#CCFF00;color:#1a1a1a;font-weight:700">+ Ajouter une photo de dégât constaté</label>';
     html+='<input type="file" id="upRepriseDegat_'+id+'" accept="image/*" multiple onchange="uploadRepriseDegats(\''+id+'\',this)" style="display:none">';
   }
@@ -3539,8 +3546,7 @@ function openRepriseDetail(id) {
 
   // PDF
   html+='<div class="divider"></div>';
-  var pdfStyle=signed?'':'opacity:0.5';
-  html+='<button class="btn btn-primary btn-full" style="'+pdfStyle+';margin-bottom:8px" onclick="genPdfReprise(\''+id+'\')" >📄 Contre-expertise reprise PDF'+(signed?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
+  html+='<button class="btn btn-primary btn-full" style="margin-bottom:8px'+(signed?'':';opacity:0.5')+'" onclick="genPdfReprise(\''+id+'\')" >📄 Contre-expertise reprise PDF'+(signed?' <span class="doc-chip ok" style="margin-left:4px">✅ Signé</span>':'')+'</button>';
 
   // ZIP photos
   var totalPhotos=(rp.photos||[]).length+(rp.degats||[]).length;
@@ -3548,8 +3554,8 @@ function openRepriseDetail(id) {
     html+='<button class="btn btn-success btn-full" style="margin-bottom:8px" onclick="downloadRepriseZip(\''+id+'\')">📦 Télécharger les photos (ZIP)</button>';
   }
 
-  // Suppression (admin ou créateur non signé)
-  var canDel=APP.isAdmin||(rp.agent===APP.user && !signed);
+  // Suppression (admin ou créateur avant toute signature)
+  var canDel=APP.isAdmin||(rp.agent===APP.user && !anySigned);
   if(canDel) html+='<button class="btn btn-danger btn-full" onclick="deleteReprise(\''+id+'\')">🗑️ Supprimer</button>';
 
   document.getElementById('repriseDetailBody').innerHTML=html;
@@ -3721,6 +3727,13 @@ function parseDateFR(val) {
 }
 
 function saveRepriseVehicleData(repriseId) {
+  var rp=null; for(var i=0;i<APP.reprises.length;i++) if(APP.reprises[i].id===repriseId) rp=APP.reprises[i];
+  if(!rp) return;
+  var anySigned=!!(rp.signature_client||rp.signature_agent);
+  if(!APP.isAdmin && anySigned) {
+    var pin=prompt('Modification après signature.\nEntrez le PIN administrateur :');
+    if(!pin||pin!==APP.adminPin) { showAlert('PIN administrateur incorrect.','🔒'); return; }
+  }
   var mec=parseDateFR(document.getElementById('repriseMecEdit_'+repriseId).value);
   var ct=parseDateFR(document.getElementById('repriseCtEdit_'+repriseId).value);
   var kmVal=document.getElementById('repriseKmEdit_'+repriseId).value;
