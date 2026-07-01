@@ -3688,9 +3688,15 @@ function saveRepriseVehicleData(repriseId) {
   var ct=document.getElementById('repriseCtEdit_'+repriseId).value||null;
   var kmVal=document.getElementById('repriseKmEdit_'+repriseId).value;
   var km=kmVal?parseInt(kmVal):null;
-  sb.from('reprises').update({date_mec:mec, date_ct:ct, km:km}).eq('id',repriseId).then(function(){
+  sb.from('reprises').update({date_mec:mec, date_ct:ct, km:km}).eq('id',repriseId).then(function(res){
+    if(res.error) throw res.error;
     return loadReprises();
-  }).catch(function(e){console.error(e);});
+  }).then(function(){
+    showToast('Données véhicule enregistrées');
+  }).catch(function(e){
+    showAlert('Erreur enregistrement : '+(e.message||JSON.stringify(e)), '⚠️');
+    console.error(e);
+  });
 }
 
 function saveRepriseChauffeur(repriseId) {
