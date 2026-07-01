@@ -424,6 +424,9 @@ input[type="file"] { display: none; }
         </div>
         <div class="form-group" id="repriseCarrosserieWrap" style="display:none"><label class="form-label">Carrosserie</label><input type="text" class="form-input" id="repriseCarrosserie" placeholder="Ex: Benne, Frigorifique, Plateau..."></div>
         <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="repriseImmat" placeholder="AB-123-CD" style="text-transform:uppercase"></div>
+        <div class="form-group"><label class="form-label">Date de mise en circulation</label><input type="date" class="form-input" id="repriseMec"></div>
+        <div class="form-group"><label class="form-label">Date de contrôle technique</label><input type="date" class="form-input" id="repriseCt"></div>
+        <div class="form-group"><label class="form-label">Kilométrage</label><input type="number" class="form-input" id="repriseKm" placeholder="Ex: 125000"></div>
         <div class="form-group"><label class="form-label">Date d'expertise</label><input type="date" class="form-input" id="repriseDate"></div>
       </div>
       <input type="hidden" id="editRepriseId">
@@ -3312,7 +3315,10 @@ function openNewReprise() {
   document.getElementById('repriseType').value='';
   document.getElementById('repriseCarrosserie').value='';
   document.getElementById('repriseImmat').value='';
-  document.getElementById('repriseDate').value=toDateStr(new Date()); // date du jour par défaut
+  document.getElementById('repriseMec').value='';
+  document.getElementById('repriseCt').value='';
+  document.getElementById('repriseKm').value='';
+  document.getElementById('repriseDate').value=toDateStr(new Date());
   document.getElementById('editRepriseId').value='';
   document.getElementById('repriseCarrosserieWrap').style.display='none';
   openModal('modalNewReprise');
@@ -3333,7 +3339,10 @@ function saveReprise() {
     immat:immat,
     agent:APP.user,
     photos:[],
-    date_expertise:document.getElementById('repriseDate').value||toDateStr(new Date())
+    date_expertise:document.getElementById('repriseDate').value||toDateStr(new Date()),
+    date_mec:document.getElementById('repriseMec').value||null,
+    date_ct:document.getElementById('repriseCt').value||null,
+    km:document.getElementById('repriseKm').value?parseInt(document.getElementById('repriseKm').value):null
   };
   showLoader('Création...');
   sb.from('reprises').insert(data).select().then(function(res){
@@ -3440,6 +3449,19 @@ function openRepriseDetail(id) {
   html+='<div class="info-row"><span class="info-label">Immatriculation</span><span class="info-value">'+esc(rp.immat)+'</span></div>';
   var dateExp=rp.date_expertise||(rp.created_at?rp.created_at.split('T')[0]:null);
   if(dateExp) html+='<div class="info-row"><span class="info-label">Date d\'expertise</span><span class="info-value">'+formatDate(dateExp)+'</span></div>';
+
+  // Champs véhicule éditables avant signature
+  if(!signed) {
+    html+='<div class="divider"></div><div class="section-title">Données véhicule *</div>';
+    html+='<div class="form-group"><label class="form-label">Date de mise en circulation *</label><input type="date" class="form-input" id="repriseMecEdit_'+id+'" value="'+(rp.date_mec||'')+'" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
+    html+='<div class="form-group"><label class="form-label">Date de contrôle technique *</label><input type="date" class="form-input" id="repriseCtEdit_'+id+'" value="'+(rp.date_ct||'')+'" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
+    html+='<div class="form-group"><label class="form-label">Kilométrage (km) *</label><input type="number" class="form-input" id="repriseKmEdit_'+id+'" value="'+(rp.km!=null?rp.km:'')+'" placeholder="Ex: 125000" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
+  } else {
+    html+='<div class="divider"></div><div class="section-title">Données véhicule</div>';
+    if(rp.date_mec) html+='<div class="info-row"><span class="info-label">Mise en circulation</span><span class="info-value">'+formatDate(rp.date_mec)+'</span></div>';
+    if(rp.date_ct) html+='<div class="info-row"><span class="info-label">Contrôle technique</span><span class="info-value">'+formatDate(rp.date_ct)+'</span></div>';
+    if(rp.km!=null) html+='<div class="info-row"><span class="info-label">Kilométrage</span><span class="info-value">'+rp.km.toLocaleString('fr-FR')+' km</span></div>';
+  }
 
   // Agent DAF (auto-renseigné, lecture seule)
   var agentDisplay=getVendeurDisplay(rp.agent)||rp.agent||'—';
@@ -3661,6 +3683,16 @@ function deleteReprisePhoto(repriseId, index) {
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
+function saveRepriseVehicleData(repriseId) {
+  var mec=document.getElementById('repriseMecEdit_'+repriseId).value||null;
+  var ct=document.getElementById('repriseCtEdit_'+repriseId).value||null;
+  var kmVal=document.getElementById('repriseKmEdit_'+repriseId).value;
+  var km=kmVal?parseInt(kmVal):null;
+  sb.from('reprises').update({date_mec:mec, date_ct:ct, km:km}).eq('id',repriseId).then(function(){
+    return loadReprises();
+  }).catch(function(e){console.error(e);});
+}
+
 function saveRepriseChauffeur(repriseId) {
   var nom=document.getElementById('repriseChauffeurNom_'+repriseId).value.trim()||null;
   var prenom=document.getElementById('repriseChauffeurPrenom_'+repriseId).value.trim()||null;
@@ -3680,6 +3712,14 @@ function openRepriseSigPad(repriseId, who) {
   if(!rp) return;
   if(!rp.signature_lieu) { showAlert('Veuillez renseigner le lieu de signature avant de signer.', '📍'); return; }
   if(!rp.chauffeur_nom||!rp.chauffeur_prenom) { showAlert('Veuillez renseigner le nom et prénom du chauffeur avant de signer.', '📝'); return; }
+  if(!rp.date_mec||!rp.date_ct||rp.km==null) {
+    var manq=[];
+    if(!rp.date_mec) manq.push('Date de mise en circulation');
+    if(!rp.date_ct) manq.push('Date de contrôle technique');
+    if(rp.km==null) manq.push('Kilométrage');
+    showAlert('Champs obligatoires avant signature : '+manq.join(', '), '📝');
+    return;
+  }
   repriseSigPadData={id:repriseId, who:who};
   document.getElementById('sigResaId').value=repriseId;
   document.getElementById('sigType').value='reprise_'+who;
@@ -3861,6 +3901,10 @@ function genPdfReprise(repriseId) {
   y+=11;
   fieldLineR('IMMATRICULATION', rp.immat, y, 0);
   fieldLineR('AGENT DAF TRUCKS', getVendeurDisplay(rp.agent), y, contentW/2);
+  y+=11;
+  fieldLineR('MISE EN CIRCULATION', rp.date_mec?formatDate(rp.date_mec):'—', y, 0);
+  fieldLineR('CONTRÔLE TECHNIQUE', rp.date_ct?formatDate(rp.date_ct):'—', y, contentW/3);
+  fieldLineR('KILOMÉTRAGE', rp.km!=null?rp.km.toLocaleString('fr-FR')+' km':'—', y, (contentW/3)*2);
   y+=11;
   var dateExpPdf=rp.date_expertise||(rp.created_at?rp.created_at.split('T')[0]:null);
   if(dateExpPdf) { fieldLineR('DATE D\'EXPERTISE', formatDate(dateExpPdf), y, 0); y+=11; }
