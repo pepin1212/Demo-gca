@@ -423,9 +423,9 @@ input[type="file"] { display: none; }
           </select>
         </div>
         <div class="form-group" id="repriseCarrosserieWrap" style="display:none"><label class="form-label">Carrosserie</label><input type="text" class="form-input" id="repriseCarrosserie" placeholder="Ex: Benne, Frigorifique, Plateau..."></div>
-        <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="repriseImmat" placeholder="AB-123-CD" style="text-transform:uppercase"></div>
-        <div class="form-group"><label class="form-label">Date de mise en circulation</label><input type="text" class="form-input" id="repriseMec" placeholder="JJ/MM/AAAA" inputmode="numeric"></div>
-        <div class="form-group"><label class="form-label">Date de contrôle technique</label><input type="text" class="form-input" id="repriseCt" placeholder="JJ/MM/AAAA" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="repriseImmat" placeholder="AA/123/AA" oninput="autoFormatImmat(this)" style="text-transform:uppercase"></div>
+        <div class="form-group"><label class="form-label">Date de mise en circulation</label><input type="text" class="form-input" id="repriseMec" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)"></div>
+        <div class="form-group"><label class="form-label">Date de contrôle technique</label><input type="text" class="form-input" id="repriseCt" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)"></div>
         <div class="form-group"><label class="form-label">Kilométrage</label><input type="number" class="form-input" id="repriseKm" placeholder="Ex: 125000"></div>
         <div class="form-group"><label class="form-label">Date d'expertise</label><div class="form-input" style="background:var(--gray-light);color:var(--dark)" id="repriseDateDisplay"></div></div>
       </div>
@@ -3455,8 +3455,8 @@ function openRepriseDetail(id) {
   // Champs véhicule éditables avant signature
   if(!signed) {
     html+='<div class="divider"></div><div class="section-title">Données véhicule *</div>';
-    html+='<div class="form-group"><label class="form-label">Date de mise en circulation *</label><input type="text" class="form-input" id="repriseMecEdit_'+id+'" value="'+(rp.date_mec?formatDate(rp.date_mec):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
-    html+='<div class="form-group"><label class="form-label">Date de contrôle technique *</label><input type="text" class="form-input" id="repriseCtEdit_'+id+'" value="'+(rp.date_ct?formatDate(rp.date_ct):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
+    html+='<div class="form-group"><label class="form-label">Date de mise en circulation *</label><input type="text" class="form-input" id="repriseMecEdit_'+id+'" value="'+(rp.date_mec?formatDate(rp.date_mec):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
+    html+='<div class="form-group"><label class="form-label">Date de contrôle technique *</label><input type="text" class="form-input" id="repriseCtEdit_'+id+'" value="'+(rp.date_ct?formatDate(rp.date_ct):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
     html+='<div class="form-group"><label class="form-label">Kilométrage (km) *</label><input type="number" class="form-input" id="repriseKmEdit_'+id+'" value="'+(rp.km!=null?rp.km:'')+'" placeholder="Ex: 125000" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
   } else {
     html+='<div class="divider"></div><div class="section-title">Données véhicule</div>';
@@ -3685,7 +3685,35 @@ function deleteReprisePhoto(repriseId, index) {
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
-// Convertit JJ/MM/AAAA ou AAAA-MM-JJ en AAAA-MM-JJ pour Supabase
+// Auto-formatage immatriculation AA/123/AA
+function autoFormatImmat(input) {
+  var raw=input.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase();
+  var result='';
+  for(var i=0;i<raw.length&&i<7;i++) {
+    if(i===2||i===5) result+='/';
+    result+=raw[i];
+  }
+  // Limiter à 9 caractères (2+1+3+1+2)
+  if(result.length>9) result=result.substring(0,9);
+  var pos=input.selectionStart;
+  input.value=result;
+  // Ajuster le curseur
+  try { input.setSelectionRange(result.length,result.length); } catch(e){}
+}
+
+// Auto-formatage date DD/MM/YYYY
+function autoFormatDate(input) {
+  var raw=input.value.replace(/\D/g,'');
+  var result='';
+  for(var i=0;i<raw.length&&i<8;i++) {
+    if(i===2||i===4) result+='/';
+    result+=raw[i];
+  }
+  if(result.length>10) result=result.substring(0,10);
+  input.value=result;
+  try { input.setSelectionRange(result.length,result.length); } catch(e){}
+}
+
 function parseDateFR(val) {
   if(!val) return null;
   val=val.trim();
