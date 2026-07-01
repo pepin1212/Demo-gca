@@ -412,25 +412,37 @@ input[type="file"] { display: none; }
       <button class="modal-close" onclick="closeModal('modalNewReprise')">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-section">
-        <div class="section-title">Informations véhicule</div>
-        <div class="form-group"><label class="form-label">Nom du client</label><input type="text" class="form-input" id="repriseClient"></div>
-        <div class="form-group"><label class="form-label">Type de véhicule</label>
-          <select class="form-input" id="repriseType" onchange="toggleCarrosserie()">
-            <option value="">— Sélectionnez —</option>
-            <option value="Tracteur">Tracteur</option>
-            <option value="Porteur">Porteur</option>
-          </select>
-        </div>
-        <div class="form-group" id="repriseCarrosserieWrap" style="display:none"><label class="form-label">Carrosserie</label><input type="text" class="form-input" id="repriseCarrosserie" placeholder="Ex: Benne, Frigorifique, Plateau..."></div>
-        <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="repriseImmat" placeholder="AA-123-AA" oninput="autoFormatImmat(this)" style="text-transform:uppercase"></div>
-        <div class="form-group"><label class="form-label">Date de mise en circulation</label><input type="text" class="form-input" id="repriseMec" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)"></div>
-        <div class="form-group"><label class="form-label">Date de contrôle technique</label><input type="text" class="form-input" id="repriseCt" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)"></div>
-        <div class="form-group"><label class="form-label">Kilométrage</label><input type="number" class="form-input" id="repriseKm" placeholder="Ex: 125000"></div>
-        <div class="form-group"><label class="form-label">Date d'expertise</label><div class="form-input" style="background:var(--gray-light);color:var(--dark)" id="repriseDateDisplay"></div></div>
+
+      <div class="section-title">Identification</div>
+      <div class="form-group"><label class="form-label">Nom du client *</label><input type="text" class="form-input" id="repriseClient"></div>
+      <div class="form-group"><label class="form-label">Type de véhicule *</label>
+        <select class="form-input" id="repriseType" onchange="toggleCarrosserie()">
+          <option value="">— Sélectionnez —</option>
+          <option value="Tracteur">Tracteur</option>
+          <option value="Porteur">Porteur</option>
+        </select>
       </div>
+      <div class="form-group" id="repriseCarrosserieWrap" style="display:none"><label class="form-label">Carrosserie</label><input type="text" class="form-input" id="repriseCarrosserie" placeholder="Ex: Benne, Frigorifique, Plateau..."></div>
+      <div class="form-group"><label class="form-label">Immatriculation *</label><input type="text" class="form-input" id="repriseImmat" placeholder="AA-123-AA" oninput="autoFormatImmat(this)" style="text-transform:uppercase"></div>
+
+      <div class="divider"></div>
+      <div class="section-title">Données véhicule *</div>
+      <div class="form-group"><label class="form-label">Date de mise en circulation *</label><input type="text" class="form-input" id="repriseMec" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)"></div>
+      <div class="form-group"><label class="form-label">Date de contrôle technique *</label><input type="text" class="form-input" id="repriseCt" placeholder="JJ/MM/AAAA" inputmode="numeric" oninput="autoFormatDate(this)"></div>
+      <div class="form-group"><label class="form-label">Kilométrage *</label><input type="number" class="form-input" id="repriseKm" placeholder="Ex: 125000"></div>
+
+      <div class="divider"></div>
+      <div class="section-title">Chauffeur / Représentant client *</div>
+      <div class="form-group"><label class="form-label">Nom *</label><input type="text" class="form-input" id="repriseChNom" placeholder="Nom"></div>
+      <div class="form-group"><label class="form-label">Prénom *</label><input type="text" class="form-input" id="repriseChPrenom" placeholder="Prénom"></div>
+
+      <div class="divider"></div>
+      <div class="section-title">Signature</div>
+      <div class="form-group"><label class="form-label">Lieu de signature *</label><input type="text" class="form-input" id="repriseLieu" placeholder="ex: Concession GCA Marseille"></div>
+      <div class="form-group"><label class="form-label">Date d'expertise</label><div class="form-input" style="background:var(--gray-light);color:var(--dark)" id="repriseDateDisplay"></div></div>
+
       <input type="hidden" id="editRepriseId">
-      <button class="btn btn-primary btn-full" onclick="saveReprise()">Créer la reprise</button>
+      <button class="btn btn-primary btn-full" onclick="saveReprise()">Créer et ajouter les photos →</button>
     </div>
   </div>
 </div>
@@ -3318,6 +3330,9 @@ function openNewReprise() {
   document.getElementById('repriseMec').value='';
   document.getElementById('repriseCt').value='';
   document.getElementById('repriseKm').value='';
+  document.getElementById('repriseChNom').value='';
+  document.getElementById('repriseChPrenom').value='';
+  document.getElementById('repriseLieu').value='';
   var today=toDateStr(new Date());
   var el=document.getElementById('repriseDateDisplay');
   if(el){el.textContent=formatDate(today);el.dataset.value=today;}
@@ -3331,9 +3346,14 @@ function saveReprise() {
   var type=document.getElementById('repriseType').value;
   var carrosserie=document.getElementById('repriseCarrosserie').value.trim();
   var immat=document.getElementById('repriseImmat').value.trim().toUpperCase();
+  var chNom=document.getElementById('repriseChNom').value.trim();
+  var chPrenom=document.getElementById('repriseChPrenom').value.trim();
+  var lieu=document.getElementById('repriseLieu').value.trim();
+
   if(!client) { showAlert('Le nom du client est requis.'); return; }
   if(!type) { showAlert('Veuillez sélectionner le type de véhicule.'); return; }
   if(!immat) { showAlert("L'immatriculation est requise."); return; }
+
   var data={
     client:client,
     type_vehicule:type,
@@ -3344,17 +3364,23 @@ function saveReprise() {
     date_expertise:toDateStr(new Date()),
     date_mec:parseDateFR(document.getElementById('repriseMec').value)||null,
     date_ct:parseDateFR(document.getElementById('repriseCt').value)||null,
-    km:document.getElementById('repriseKm').value?parseInt(document.getElementById('repriseKm').value):null
+    km:document.getElementById('repriseKm').value?parseInt(document.getElementById('repriseKm').value):null,
+    chauffeur_nom:chNom||null,
+    chauffeur_prenom:chPrenom||null,
+    signature_lieu:lieu||null
   };
   showLoader('Création...');
   sb.from('reprises').insert(data).select().then(function(res){
     if(res.error) throw res.error;
-    return loadReprises();
-  }).then(function(){
+    var newId=res.data&&res.data[0]&&res.data[0].id;
+    return loadReprises().then(function(){ return newId; });
+  }).then(function(newId){
     hideLoader();
     closeModal('modalNewReprise');
     renderRepriseList();
-    showToast('Reprise créée');
+    // Ouvrir directement le détail pour ajouter les photos
+    if(newId) openRepriseDetail(newId);
+    else showToast('Reprise créée');
   }).catch(function(e){
     hideLoader();
     showAlert('Erreur création reprise : '+(e.message||e.details||JSON.stringify(e)), '⚠️');
