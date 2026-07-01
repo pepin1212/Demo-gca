@@ -427,7 +427,7 @@ input[type="file"] { display: none; }
         <div class="form-group"><label class="form-label">Date de mise en circulation</label><input type="date" class="form-input" id="repriseMec"></div>
         <div class="form-group"><label class="form-label">Date de contrôle technique</label><input type="date" class="form-input" id="repriseCt"></div>
         <div class="form-group"><label class="form-label">Kilométrage</label><input type="number" class="form-input" id="repriseKm" placeholder="Ex: 125000"></div>
-        <div class="form-group"><label class="form-label">Date d'expertise</label><input type="date" class="form-input" id="repriseDate"></div>
+        <div class="form-group"><label class="form-label">Date d'expertise</label><div class="form-input" style="background:var(--gray-light);color:var(--dark)" id="repriseDateDisplay"></div></div>
       </div>
       <input type="hidden" id="editRepriseId">
       <button class="btn btn-primary btn-full" onclick="saveReprise()">Créer la reprise</button>
@@ -3318,7 +3318,9 @@ function openNewReprise() {
   document.getElementById('repriseMec').value='';
   document.getElementById('repriseCt').value='';
   document.getElementById('repriseKm').value='';
-  document.getElementById('repriseDate').value=toDateStr(new Date());
+  var today=toDateStr(new Date());
+  var el=document.getElementById('repriseDateDisplay');
+  if(el){el.textContent=formatDate(today);el.dataset.value=today;}
   document.getElementById('editRepriseId').value='';
   document.getElementById('repriseCarrosserieWrap').style.display='none';
   openModal('modalNewReprise');
@@ -3339,7 +3341,7 @@ function saveReprise() {
     immat:immat,
     agent:APP.user,
     photos:[],
-    date_expertise:document.getElementById('repriseDate').value||toDateStr(new Date()),
+    date_expertise:toDateStr(new Date()),
     date_mec:document.getElementById('repriseMec').value||null,
     date_ct:document.getElementById('repriseCt').value||null,
     km:document.getElementById('repriseKm').value?parseInt(document.getElementById('repriseKm').value):null
