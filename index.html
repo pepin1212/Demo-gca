@@ -414,7 +414,7 @@ input[type="file"] { display: none; }
     <div class="modal-body">
       <div class="form-section">
         <div class="section-title">Informations véhicule</div>
-        <div class="form-group"><label class="form-label">Nom du client</label><input type="text" class="form-input" id="repriseClient" placeholder="Nom et prénom"></div>
+        <div class="form-group"><label class="form-label">Nom du client</label><input type="text" class="form-input" id="repriseClient"></div>
         <div class="form-group"><label class="form-label">Type de véhicule</label>
           <select class="form-input" id="repriseType" onchange="toggleCarrosserie()">
             <option value="">— Sélectionnez —</option>
@@ -424,8 +424,8 @@ input[type="file"] { display: none; }
         </div>
         <div class="form-group" id="repriseCarrosserieWrap" style="display:none"><label class="form-label">Carrosserie</label><input type="text" class="form-input" id="repriseCarrosserie" placeholder="Ex: Benne, Frigorifique, Plateau..."></div>
         <div class="form-group"><label class="form-label">Immatriculation</label><input type="text" class="form-input" id="repriseImmat" placeholder="AB-123-CD" style="text-transform:uppercase"></div>
-        <div class="form-group"><label class="form-label">Date de mise en circulation</label><input type="date" class="form-input" id="repriseMec"></div>
-        <div class="form-group"><label class="form-label">Date de contrôle technique</label><input type="date" class="form-input" id="repriseCt"></div>
+        <div class="form-group"><label class="form-label">Date de mise en circulation</label><input type="text" class="form-input" id="repriseMec" placeholder="JJ/MM/AAAA" inputmode="numeric"></div>
+        <div class="form-group"><label class="form-label">Date de contrôle technique</label><input type="text" class="form-input" id="repriseCt" placeholder="JJ/MM/AAAA" inputmode="numeric"></div>
         <div class="form-group"><label class="form-label">Kilométrage</label><input type="number" class="form-input" id="repriseKm" placeholder="Ex: 125000"></div>
         <div class="form-group"><label class="form-label">Date d'expertise</label><div class="form-input" style="background:var(--gray-light);color:var(--dark)" id="repriseDateDisplay"></div></div>
       </div>
@@ -3342,8 +3342,8 @@ function saveReprise() {
     agent:APP.user,
     photos:[],
     date_expertise:toDateStr(new Date()),
-    date_mec:document.getElementById('repriseMec').value||null,
-    date_ct:document.getElementById('repriseCt').value||null,
+    date_mec:parseDateFR(document.getElementById('repriseMec').value)||null,
+    date_ct:parseDateFR(document.getElementById('repriseCt').value)||null,
     km:document.getElementById('repriseKm').value?parseInt(document.getElementById('repriseKm').value):null
   };
   showLoader('Création...');
@@ -3455,14 +3455,14 @@ function openRepriseDetail(id) {
   // Champs véhicule éditables avant signature
   if(!signed) {
     html+='<div class="divider"></div><div class="section-title">Données véhicule *</div>';
-    html+='<div class="form-group"><label class="form-label">Date de mise en circulation *</label><input type="date" class="form-input" id="repriseMecEdit_'+id+'" value="'+(rp.date_mec||'')+'" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
-    html+='<div class="form-group"><label class="form-label">Date de contrôle technique *</label><input type="date" class="form-input" id="repriseCtEdit_'+id+'" value="'+(rp.date_ct||'')+'" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
+    html+='<div class="form-group"><label class="form-label">Date de mise en circulation *</label><input type="text" class="form-input" id="repriseMecEdit_'+id+'" value="'+(rp.date_mec?formatDate(rp.date_mec):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
+    html+='<div class="form-group"><label class="form-label">Date de contrôle technique *</label><input type="text" class="form-input" id="repriseCtEdit_'+id+'" value="'+(rp.date_ct?formatDate(rp.date_ct):'')+'" placeholder="JJ/MM/AAAA" inputmode="numeric" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
     html+='<div class="form-group"><label class="form-label">Kilométrage (km) *</label><input type="number" class="form-input" id="repriseKmEdit_'+id+'" value="'+(rp.km!=null?rp.km:'')+'" placeholder="Ex: 125000" onchange="saveRepriseVehicleData(\''+id+'\')"></div>';
   } else {
     html+='<div class="divider"></div><div class="section-title">Données véhicule</div>';
     if(rp.date_mec) html+='<div class="info-row"><span class="info-label">Mise en circulation</span><span class="info-value">'+formatDate(rp.date_mec)+'</span></div>';
     if(rp.date_ct) html+='<div class="info-row"><span class="info-label">Contrôle technique</span><span class="info-value">'+formatDate(rp.date_ct)+'</span></div>';
-    if(rp.km!=null) html+='<div class="info-row"><span class="info-label">Kilométrage</span><span class="info-value">'+rp.km.toLocaleString('fr-FR')+' km</span></div>';
+    if(rp.km!=null) html+='<div class="info-row"><span class="info-label">Kilométrage</span><span class="info-value">'+rp.km+' km</span></div>';
   }
 
   // Agent DAF (auto-renseigné, lecture seule)
@@ -3685,9 +3685,19 @@ function deleteReprisePhoto(repriseId, index) {
   }).catch(function(e){hideLoader();showToast('Erreur');console.error(e);});
 }
 
+// Convertit JJ/MM/AAAA ou AAAA-MM-JJ en AAAA-MM-JJ pour Supabase
+function parseDateFR(val) {
+  if(!val) return null;
+  val=val.trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(val)) return val; // déjà ISO
+  var m=val.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if(m) return m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);
+  return null; // format invalide
+}
+
 function saveRepriseVehicleData(repriseId) {
-  var mec=document.getElementById('repriseMecEdit_'+repriseId).value||null;
-  var ct=document.getElementById('repriseCtEdit_'+repriseId).value||null;
+  var mec=parseDateFR(document.getElementById('repriseMecEdit_'+repriseId).value);
+  var ct=parseDateFR(document.getElementById('repriseCtEdit_'+repriseId).value);
   var kmVal=document.getElementById('repriseKmEdit_'+repriseId).value;
   var km=kmVal?parseInt(kmVal):null;
   sb.from('reprises').update({date_mec:mec, date_ct:ct, km:km}).eq('id',repriseId).then(function(res){
@@ -3912,7 +3922,7 @@ function genPdfReprise(repriseId) {
   y+=11;
   fieldLineR('MISE EN CIRCULATION', rp.date_mec?formatDate(rp.date_mec):'—', y, 0);
   fieldLineR('CONTRÔLE TECHNIQUE', rp.date_ct?formatDate(rp.date_ct):'—', y, contentW/3);
-  fieldLineR('KILOMÉTRAGE', rp.km!=null?rp.km.toLocaleString('fr-FR')+' km':'—', y, (contentW/3)*2);
+  fieldLineR('KILOMÉTRAGE', rp.km!=null?rp.km+' km':'—', y, (contentW/3)*2);
   y+=11;
   var dateExpPdf=rp.date_expertise||(rp.created_at?rp.created_at.split('T')[0]:null);
   if(dateExpPdf) { fieldLineR('DATE D\'EXPERTISE', formatDate(dateExpPdf), y, 0); y+=11; }
