@@ -917,6 +917,23 @@ function compressPhoto(file, callback) {
   reader.readAsDataURL(file);
 }
 
+// Compresse un dataUrl image pour intégration PDF (1200px max, qualité 70%)
+function compressImageForPdf(dataUrl, callback) {
+  var img=new Image();
+  img.onload=function(){
+    var maxW=1200, maxH=1200;
+    var w=img.width, h=img.height;
+    if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+    if(h>maxH){ w=Math.round(w*maxH/h); h=maxH; }
+    var canvas=document.createElement('canvas');
+    canvas.width=w; canvas.height=h;
+    canvas.getContext('2d').drawImage(img,0,0,w,h);
+    callback(canvas.toDataURL('image/jpeg',0.70), w, h);
+  };
+  img.onerror=function(){ callback(dataUrl, img.naturalWidth||800, img.naturalHeight||600); };
+  img.src=dataUrl;
+}
+
 // Upload fichier vers Supabase Storage
 function uploadToStorage(bucket, path, base64data) {
   var parts = base64data.split(',');
@@ -2725,7 +2742,9 @@ function genPdfConfirmation(resaId, type, outputMode) {
             var dataUrl=e.target.result;
             var img=new Image();
             img.onload=function(){
-              resolve({data:dataUrl, w:img.naturalWidth, h:img.naturalHeight});
+              compressImageForPdf(dataUrl, function(compressed, cw, ch){
+                resolve({data:compressed, w:cw, h:ch});
+              });
             };
             img.onerror=function(){ resolve({data:dataUrl, w:cellW, h:cellW*0.74}); };
             img.src=dataUrl;
@@ -2798,7 +2817,9 @@ function genPdfConfirmation(resaId, type, outputMode) {
                   var dataUrl=e.target.result;
                   var img=new Image();
                   img.onload=function(){
-                    resolve({data:dataUrl, w:img.naturalWidth, h:img.naturalHeight});
+                    compressImageForPdf(dataUrl, function(compressed, cw, ch){
+                      resolve({data:compressed, w:cw, h:ch});
+                    });
                   };
                   img.onerror=function(){ resolve({data:dataUrl, w:100, h:74}); };
                   img.src=dataUrl;
@@ -3982,7 +4003,6 @@ function genPdfReprise(repriseId) {
   if(rp.carrosserie) fieldLineR('CARROSSERIE', rp.carrosserie, y, (contentW/3)*2);
   y+=11;
   fieldLineR('IMMATRICULATION', rp.immat, y, 0);
-  fieldLineR('AGENT DAF TRUCKS', getVendeurDisplay(rp.agent), y, contentW/2);
   y+=11;
   fieldLineR('MISE EN CIRCULATION', rp.date_mec?formatDate(rp.date_mec):'—', y, 0);
   fieldLineR('CONTRÔLE TECHNIQUE', rp.date_ct?formatDate(rp.date_ct):'—', y, contentW/3);
@@ -3991,7 +4011,9 @@ function genPdfReprise(repriseId) {
   var dateExpPdf=rp.date_expertise||(rp.created_at?rp.created_at.split('T')[0]:null);
   if(dateExpPdf) { fieldLineR('DATE D\'EXPERTISE', formatDate(dateExpPdf), y, 0); y+=11; }
   var chauffeurDisplay=((rp.chauffeur_prenom||'')+' '+(rp.chauffeur_nom||'')).trim();
-  if(chauffeurDisplay) { fieldLineR('CHAUFFEUR / REPRÉSENTANT', chauffeurDisplay, y, 0); y+=11; }
+  fieldLineR('AGENT DAF TRUCKS', getVendeurDisplay(rp.agent)||'—', y, 0);
+  fieldLineR('CHAUFFEUR / REPRÉSENTANT', chauffeurDisplay||'—', y, contentW/2);
+  y+=11;
 
   // Photos — 2 colonnes, max 4 par page (2 lignes × 2 colonnes)
   var photos=rp.photos||[];
@@ -4013,7 +4035,11 @@ function genPdfReprise(repriseId) {
           var rd=new FileReader();
           rd.onload=function(e){
             var img=new Image();
-            img.onload=function(){resolve({data:e.target.result,ratio:img.naturalWidth/img.naturalHeight});};
+            img.onload=function(){
+              compressImageForPdf(e.target.result, function(compressed, cw, ch){
+                resolve({data:compressed, ratio:cw/ch});
+              });
+            };
             img.onerror=function(){resolve(null);};
             img.src=e.target.result;
           };
@@ -4100,7 +4126,11 @@ function genPdfReprise(repriseId) {
               reader.onload=function(e){
                 var dataUrl=e.target.result;
                 var img=new Image();
-                img.onload=function(){ resolve({data:dataUrl, ratio:img.naturalWidth/img.naturalHeight, note:item.note}); };
+                img.onload=function(){
+                  compressImageForPdf(dataUrl, function(compressed, cw, ch){
+                    resolve({data:compressed, ratio:cw/ch, note:item.note});
+                  });
+                };
                 img.onerror=function(){ resolve({data:dataUrl, ratio:4/3, note:item.note}); };
                 img.src=dataUrl;
               };
